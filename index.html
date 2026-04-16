@@ -2,42 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Streamflow Dashboard</title>
- <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 1rem;
-      background: #f5f5f5;
-    }
-    h1 {
-      text-align: center;
-    }
-    .station {
-      background: white;
-      padding: 1rem;
-      margin: 1rem 0;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    canvas {
-      max-width: 100%;
-      height: auto;
-      margin-bottom: 1rem;
-    }
-    button {
-      display: block;
-      margin: 1rem auto;
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-    }
+    body {font-family: sans-serif; margin: 1rem; background: #f5f5f5;}
+    h1 {text-align: center;}
+    .station {background: white; padding: 1rem; margin: 1rem 0; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+    canvas {max-width: 100%; height: auto; margin-bottom: 1rem;}
+    button {display: block; margin: 1rem auto; padding: 0.5rem 1rem; font-size: 1rem;}
+    #status {text-align: center; color: red;}
   </style>
 </head>
 <body>
-
 <h1>Streamflow Dashboard</h1>
-<button onclick="refreshData()">🔄 Refresh Data</button>
+<button onclick="refreshData()">Refresh Data</button>
+<div id="status"></div>
 <div id="stations"></div>
 
 <script>
@@ -55,8 +35,6 @@ const stations = [
   { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" }
 ];
 
-const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
-
 function fmtDate(date) {
   return date.toISOString().split('T')[0];
 }
@@ -64,87 +42,68 @@ function fmtDate(date) {
 async function fetchData(stationId, param) {
   const now = new Date();
   const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday/` +
-              `?format=json&abbrev=${stationId}&parameter=${param}` +
-              `&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(now)}` +
-              `&apiKey=${encodeURIComponent(apiKey)}`;
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday/?format=json&abbrev=${stationId}&parameter=${param}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(now)}`;
   const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
 function createChart(canvasId, label, labels, data, color, unit) {
   new Chart(document.getElementById(canvasId), {
     type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: label,
-        data: data,
-        borderColor: color,
-        backgroundColor: 'transparent',
-        tension: 0.3
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { display: false },
-        y: {
-          ticks: {
-            callback: value => `${value} ${unit}`
-          }
-        }
-      }
-    }
+    data: { labels, datasets: [{ label, data, borderColor: color, backgroundColor: 'transparent', tension: 0.3 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { callback: v => `${v} ${unit}` } } } }
   });
 }
 
 async function refreshData() {
+  const status = document.getElementById('status');
+  status.textContent = 'Loading...';
   document.getElementById('stations').innerHTML = '';
-  for (const station of stations) {
-    const [stage, temp, flow] = await Promise.all([
-      fetchData(station.id, 'STAGE'),
-      fetchData(station.id, 'WATERTEMP'),
-      fetchData(station.id, 'DISCHRG')
-    ]);
+  try {
+    for (const station of stations) {
+      const [stage, temp, flow] = await Promise.all([
+        fetchData(station.id, 'STAGE'),
+        fetchData(station.id, 'WATERTEMP'),
+        fetchData(station.id, 'DISCHRG')
+      ]);
 
-    const stageData = stage.ResultList || [];
-    const tempData = temp.ResultList || [];
-    const flowData = flow.ResultList || [];
+      const stageData = stage.ResultList || [];
+      const tempData = temp.ResultList || [];
+      const flowData = flow.ResultList || [];
 
-    const labels = stageData.map(d => d.measDateTime.split('T')[0]);
-    const stageVals = stageData.map(d => d.measValue);
-    const tempVals = tempData.map(d => d.measValue);
-    const flowVals = flowData.map(d => d.measValue);
+      const labels = stageData.map(d => d.measDateTime.split('T')[0]);
+      const stageVals = stageData.map(d => d.measValue);
+      const tempVals = tempData.map(d => d.measValue);
+      const flowVals = flowData.map(d => d.measValue);
 
-    const latestStage = stageVals.at(-1);
-    const latestTemp = tempVals.at(-1);
-    const latestFlow = flowVals.at(-1);
+      const latestStage = stageVals.at(-1) ?? 'N/A';
+      const latestTemp = tempVals.at(-1) ?? 'N/A';
+      const latestFlow = flowVals.at(-1) ?? 'N/A';
 
-    const div = document.createElement('div');
-    div.className = 'station';
-    div.innerHTML = `
-      <h2>${station.name}</h2>
-      <p>
-        <b>Gauge Height:</b> ${latestStage ?? 'N/A'} ft<br/>
-        <b>Water Temp:</b> ${latestTemp ?? 'N/A'} °<br/>
-        <b>Flow:</b> ${latestFlow ?? 'N/A'} CFS
-      </p>
-      <canvas id="chart-${station.id}-stage"></canvas>
-      <canvas id="chart-${station.id}-temp"></canvas>
-      <canvas id="chart-${station.id}-flow"></canvas>
-    `;
-    document.getElementById('stations').appendChild(div);
+      const div = document.createElement('div');
+      div.className = 'station';
+      div.innerHTML = `
+        <h2>${station.name}</h2>
+        <p><b>Gauge:</b> ${latestStage} ft<br/><b>Temp:</b> ${latestTemp} °<br/><b>Flow:</b> ${latestFlow} CFS</p>
+        <canvas id="chart-${station.id}-stage"></canvas>
+        <canvas id="chart-${station.id}-temp"></canvas>
+        <canvas id="chart-${station.id}-flow"></canvas>
+      `;
+      document.getElementById('stations').appendChild(div);
 
-    if (stageVals.length) createChart(`chart-${station.id}-stage`, 'Gauge Height', labels, stageVals, 'blue', 'ft');
-    if (tempVals.length) createChart(`chart-${station.id}-temp`, 'Water Temp', labels, tempVals, 'red', '°');
-    if (flowVals.length) createChart(`chart-${station.id}-flow`, 'Flow', labels, flowVals, 'green', 'CFS');
+      if (stageVals.length) createChart(`chart-${station.id}-stage`, 'Gauge Height', labels, stageVals, 'blue', 'ft');
+      if (tempVals.length) createChart(`chart-${station.id}-temp`, 'Water Temp', labels, tempVals, 'red', '°');
+      if (flowVals.length) createChart(`chart-${station.id}-flow`, 'Flow', labels, flowVals, 'green', 'CFS');
+    }
+    status.textContent = '';
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message + ' (check console)';
+    console.error(e);
   }
 }
 
 refreshData();
 </script>
-
 </body>
 </html>
