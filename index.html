@@ -64,7 +64,7 @@ function fmtDate(date) {
 async function fetchData(stationId, param) {
   const now = new Date();
   const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesraw/` +
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday/` +
               `?format=json&abbrev=${stationId}&parameter=${param}` +
               `&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(now)}` +
               `&apiKey=${encodeURIComponent(apiKey)}`;
