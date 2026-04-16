@@ -4,13 +4,13 @@ import requests
 
 app = Flask(__name__)
 
-CDSS_BASE = "https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations"
+BASE = "https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations"
 
 @app.route("/latest")
 def latest():
     station = request.args.get("station")
     param = request.args.get("param")
-    url = f"{CDSS_BASE}/telemetrytimeserieslatest/?format=json&abbrev={station}&parameter={param}"
+    url = f"{BASE}/telemetrytimeserieslatest/?format=json&abbrev={station}&parameter={param}"
     r = requests.get(url, timeout=10)
     return jsonify(r.json())
 
@@ -18,7 +18,7 @@ def latest():
 def hourly():
     station = request.args.get("station")
     param = request.args.get("param")
-    url = f"{CDSS_BASE}/telemetrytimeserieshourly/?format=json&abbrev={station}&parameter={param}&days=10&sortDirection=ASC"
+    url = f"{BASE}/telemetrytimeserieshourly/?format=json&abbrev={station}&parameter={param}&days=10&sortDirection=ASC"
     r = requests.get(url, timeout=10)
     return jsonify(r.json())
 
