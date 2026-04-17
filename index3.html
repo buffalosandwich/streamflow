@@ -51,7 +51,8 @@ const stations = [
   { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
   { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
   { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
-  { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" }
+  { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" },
+  { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" } // Added Trinchera
 ];
 
 const PARAMS = {
@@ -60,11 +61,11 @@ const PARAMS = {
   WTR_TEMP: { label: "Temp", unit: "°F" }
 };
 
-// FIXED: Reverted WTR_TEMP back to WATERTEMP
 const DWR_PARAM_MAP = {
   DISCHRG: "DISCHRG",
   GAGE_HT: "GAGE_HT",  
-  WTR_TEMP: "WATERTEMP" 
+  WTR_TEMP: "WTR_TEMP", 
+  WATERTEMP: "WATERTEMP"
 };
 
 function fmtDate(date) {
@@ -99,12 +100,11 @@ function trendInfo(current, prev) {
 }
 
 async function fetchDWRHistory(stationId, paramKey) {
-  const dwrParam = DWR_PARAM_MAP[paramKey];
+  const dwrParam = DWR_PARAM_MAP[paramKey] || paramKey;
   if (!dwrParam) return [];
   const now = new Date();
   const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
   
-  // FIXED: Reverted to telemetrytimeseriesday and unencoded date strings
   const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(now)}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
     const res = await fetch(url);
@@ -112,7 +112,6 @@ async function fetchDWRHistory(stationId, paramKey) {
     const json = await res.json();
     const list = json.ResultList || [];
     return list.map(d => ({
-      // FIXED: Fallback check for both measDate and measDateTime
       time: d.measDate || d.measDateTime, 
       value: d.measValue != null ? Number(d.measValue) : null
     }));
@@ -172,11 +171,14 @@ async function loadStation(station) {
   const status = document.getElementById("status");
   status.textContent = `Loading ${station.name}...`;
   try {
-    const [histFlow, histGage, histTemp] = await Promise.all([
-      fetchDWRHistory(sid, "DISCHRG"),
-      fetchDWRHistory(sid, "GAGE_HT").catch(() => []),
-      fetchDWRHistory(sid, "WTR_TEMP").catch(() => [])
-    ]);
+    const histFlow = await fetchDWRHistory(sid, "DISCHRG");
+    const histGage = await fetchDWRHistory(sid, "GAGE_HT").catch(() => []);
+    
+    // Attempt standard WTR_TEMP first, fallback to WATERTEMP if empty
+    let histTemp = await fetchDWRHistory(sid, "WTR_TEMP").catch(() => []);
+    if (!histTemp.length) {
+      histTemp = await fetchDWRHistory(sid, "WATERTEMP").catch(() => []);
+    }
 
     const flow = getLatestAndPrev(histFlow);
     const gage = getLatestAndPrev(histGage);
@@ -252,7 +254,6 @@ async function loadStation(station) {
       data: {
         labels: labels,
         datasets: [
-          // FIXED: Increased borderWidth and pointRadius so the daily data points actually render on screen
           { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yFlow', spanGaps: true },
           { label: "Gage (ft)", data: gageSeries, borderColor: "rgba(255, 165, 0, 1)", backgroundColor: "rgba(255, 165, 0, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yGage', spanGaps: true },
           { label: "Temp (°F)", data: tempSeries, borderColor: "rgba(128, 0, 128, 1)", backgroundColor: "rgba(128, 0, 128, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yTemp', spanGaps: true }
