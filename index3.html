@@ -60,10 +60,11 @@ const PARAMS = {
   WTR_TEMP: { label: "Temp", unit: "°F" }
 };
 
+// FIXED: Corrected DWR parameter codes
 const DWR_PARAM_MAP = {
   DISCHRG: "DISCHRG",
-  GAGE_HT: "STAGE",
-  WTR_TEMP: "WATERTEMP"
+  GAGE_HT: "GAGE_HT",  
+  WTR_TEMP: "WTR_TEMP" 
 };
 
 function fmtDate(date) {
@@ -97,12 +98,17 @@ function trendInfo(current, prev) {
   return { arrow: "→", cls: "trend-flat" };
 }
 
+// FIXED: Switched to telemetrytimeserieshour and URI encoded the dates for safety
 async function fetchDWRHistory(stationId, paramKey) {
   const dwrParam = DWR_PARAM_MAP[paramKey];
   if (!dwrParam) return [];
   const now = new Date();
   const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(now)}&apiKey=${encodeURIComponent(apiKey)}`;
+  
+  const startDateStr = encodeURIComponent(fmtDate(tenDaysAgo));
+  const endDateStr = encodeURIComponent(fmtDate(now));
+  
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${startDateStr}&endDate=${endDateStr}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
@@ -224,25 +230,35 @@ async function loadStation(station) {
     }
 
     const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
-    const labels = histFlow.map(h => h.time);
+    
+    // FIXED: Gather all unique timestamps to form the X-axis properly
+    const allTimes = new Set();
+    histFlow.forEach(h => allTimes.add(h.time));
+    histGage.forEach(h => allTimes.add(h.time));
+    histTemp.forEach(h => allTimes.add(h.time));
+    const labels = Array.from(allTimes).sort((a, b) => new Date(a) - new Date(b));
+
     function mapToLabels(labels, series) {
       const map = {};
       series.forEach(s => { map[s.time] = s.value; });
       return labels.map(t => map[t] ?? null);
     }
+    
     const flowSeries = mapToLabels(labels, histFlow);
     const gageSeries = mapToLabels(labels, histGage);
     const tempSeries = mapToLabels(labels, histTemp);
 
     if (charts[sid]) charts[sid].destroy();
+    
+    // FIXED: Added yAxisIDs and spanGaps: true to all datasets
     charts[sid] = new Chart(ctx, {
       type: "line",
       data: {
         labels: labels,
         datasets: [
-          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3 },
-          { label: "Gage (ft)", data: gageSeries, borderColor: "rgba(255, 165, 0, 1)", backgroundColor: "rgba(255, 165, 0, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3 },
-          { label: "Temp (°F)", data: tempSeries, borderColor: "rgba(128, 0, 128, 1)", backgroundColor: "rgba(128, 0, 128, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3 }
+          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3, yAxisID: 'yFlow', spanGaps: true },
+          { label: "Gage (ft)", data: gageSeries, borderColor: "rgba(255, 165, 0, 1)", backgroundColor: "rgba(255, 165, 0, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3, yAxisID: 'yGage', spanGaps: true },
+          { label: "Temp (°F)", data: tempSeries, borderColor: "rgba(128, 0, 128, 1)", backgroundColor: "rgba(128, 0, 128, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3, yAxisID: 'yTemp', spanGaps: true }
         ]
       },
       options: {
@@ -252,7 +268,13 @@ async function loadStation(station) {
           legend: { display: true, labels: { boxWidth: 10, font: { size: 9 } } },
           tooltip: { mode: "index", intersect: false }
         },
-        scales: { x: { display: false }, y: { display: false } }
+        scales: { 
+          x: { display: false }, 
+          // FIXED: Created independent Y-axes so smaller values aren't squashed
+          yFlow: { type: 'linear', display: false, position: 'left' },
+          yGage: { type: 'linear', display: false, position: 'right' },
+          yTemp: { type: 'linear', display: false, position: 'right' }
+        }
       }
     });
     status.textContent = "";
@@ -275,6 +297,9 @@ async function loadAll() {
   }
   status.textContent = "All stations loaded. Refresh whenever you like.";
 }
+
+// Automatically load stations on page load
+loadAll();
 </script>
 </body>
 </html>
