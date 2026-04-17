@@ -107,10 +107,9 @@ async function fetchDWRHistory(stationId, paramKey) {
   
   const now = new Date();
   const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-  // FIXED: Set the end date to tomorrow so the API captures all of today's hours
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   
-  // FIXED: Switched to telemetrytimeserieshour
+  // We keep the hourly fetch so your text is always up to the minute
   const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(tomorrow)}&apiKey=${encodeURIComponent(apiKey)}`;
   
   try {
@@ -178,6 +177,7 @@ async function loadStation(station) {
   try {
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
 
+    // Grab the up-to-the-minute reading for the text displays
     const flow = getLatestAndPrev(histFlow);
     const flow24 = value24hAgo(histFlow, flow.latestTime);
     const flowPct = percentChange(flow.latestValue, flow24);
@@ -197,6 +197,8 @@ async function loadStation(station) {
       const badgeCls = badgeClass(pct);
       const badgeText = formatPct(pct);
       const valText = data.latestValue != null ? data.latestValue.toFixed(2) : "—";
+      
+      // Note: the arrow (trend) reflects the last hour's change. The badge reflects the 24-hour change.
       row.innerHTML = `
         <span class="label">${meta.label}:</span>
         <span class="value ${trend.cls}">${valText} ${meta.unit} ${trend.arrow}</span>
@@ -219,17 +221,28 @@ async function loadStation(station) {
 
     const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
     
-    const allTimes = new Set();
-    histFlow.forEach(h => { if(h.time) allTimes.add(h.time) });
-    const labels = Array.from(allTimes).sort((a, b) => new Date(a) - new Date(b));
-
-    function mapToLabels(labels, series) {
-      const map = {};
-      series.forEach(s => { if(s.time) map[s.time] = s.value; });
-      return labels.map(t => map[t] ?? null);
-    }
+    // FIXED: Filter the hourly data down to one point per day for the chart
+    const dailyFlow = [];
+    const seenDates = new Set();
     
-    const flowSeries = mapToLabels(labels, histFlow);
+    // Iterate backward to grab the latest available reading for each calendar day
+    for (let i = histFlow.length - 1; i >= 0; i--) {
+      if (!histFlow[i].time) continue;
+      const dateObj = new Date(histFlow[i].time);
+      const dateStr = dateObj.toLocaleDateString();
+      
+      if (!seenDates.has(dateStr)) {
+        seenDates.add(dateStr);
+        // Push to the front of the array to keep them in chronological order
+        dailyFlow.unshift({
+          timeLabel: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`,
+          value: histFlow[i].value
+        });
+      }
+    }
+
+    const labels = dailyFlow.map(d => d.timeLabel);
+    const flowSeries = dailyFlow.map(d => d.value);
 
     if (charts[sid]) charts[sid].destroy();
     
@@ -238,8 +251,8 @@ async function loadStation(station) {
       data: {
         labels: labels,
         datasets: [
-          // FIXED: Changed pointRadius to 0 so the hourly data draws as a smooth line
-          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 0, tension: 0.3, yAxisID: 'yFlow', spanGaps: true }
+          // FIXED: Increased pointRadius back to 3 so the daily dots are visible
+          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'yFlow', spanGaps: true }
         ]
       },
       options: {
@@ -250,7 +263,7 @@ async function loadStation(station) {
           tooltip: { mode: "index", intersect: false }
         },
         scales: { 
-          x: { display: false }, 
+          x: { display: true, ticks: { font: { size: 10 } } }, // Made x-axis labels visible to show the days
           yFlow: { type: 'linear', display: false, position: 'left' }
         }
       }
