@@ -1,0 +1,35 @@
+/* Organizing CSS styles from index.html */
+
+body {
+    background-color: #f4f4f4;
+    font-family: Arial, sans-serif;
+}
+
+h1, h2, h3 {
+    color: #333;
+}
+
+.header {
+    background-color: #35424a;
+    color: #ffffff;
+    padding: 20px;
+}
+
+.footer {
+    background-color: #35424a;
+    color: #ffffff;
+    padding: 10px;
+}
+
+.button {
+    background-color: #e8491d;
+    border: none;
+    color: white;
+    padding: 10px 15px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+}
