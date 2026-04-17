@@ -60,11 +60,11 @@ const PARAMS = {
   WTR_TEMP: { label: "Temp", unit: "°F" }
 };
 
-// FIXED: Corrected DWR parameter codes
+// FIXED: Reverted WTR_TEMP back to WATERTEMP
 const DWR_PARAM_MAP = {
   DISCHRG: "DISCHRG",
   GAGE_HT: "GAGE_HT",  
-  WTR_TEMP: "WTR_TEMP" 
+  WTR_TEMP: "WATERTEMP" 
 };
 
 function fmtDate(date) {
@@ -98,24 +98,22 @@ function trendInfo(current, prev) {
   return { arrow: "→", cls: "trend-flat" };
 }
 
-// FIXED: Switched to telemetrytimeserieshour and URI encoded the dates for safety
 async function fetchDWRHistory(stationId, paramKey) {
   const dwrParam = DWR_PARAM_MAP[paramKey];
   if (!dwrParam) return [];
   const now = new Date();
   const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
   
-  const startDateStr = encodeURIComponent(fmtDate(tenDaysAgo));
-  const endDateStr = encodeURIComponent(fmtDate(now));
-  
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${startDateStr}&endDate=${endDateStr}&apiKey=${encodeURIComponent(apiKey)}`;
+  // FIXED: Reverted to telemetrytimeseriesday and unencoded date strings
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeseriesday?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(now)}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
     const json = await res.json();
     const list = json.ResultList || [];
     return list.map(d => ({
-      time: d.measDateTime,
+      // FIXED: Fallback check for both measDate and measDateTime
+      time: d.measDate || d.measDateTime, 
       value: d.measValue != null ? Number(d.measValue) : null
     }));
   } catch(e) {
@@ -231,16 +229,15 @@ async function loadStation(station) {
 
     const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
     
-    // FIXED: Gather all unique timestamps to form the X-axis properly
     const allTimes = new Set();
-    histFlow.forEach(h => allTimes.add(h.time));
-    histGage.forEach(h => allTimes.add(h.time));
-    histTemp.forEach(h => allTimes.add(h.time));
+    histFlow.forEach(h => { if(h.time) allTimes.add(h.time) });
+    histGage.forEach(h => { if(h.time) allTimes.add(h.time) });
+    histTemp.forEach(h => { if(h.time) allTimes.add(h.time) });
     const labels = Array.from(allTimes).sort((a, b) => new Date(a) - new Date(b));
 
     function mapToLabels(labels, series) {
       const map = {};
-      series.forEach(s => { map[s.time] = s.value; });
+      series.forEach(s => { if(s.time) map[s.time] = s.value; });
       return labels.map(t => map[t] ?? null);
     }
     
@@ -250,15 +247,15 @@ async function loadStation(station) {
 
     if (charts[sid]) charts[sid].destroy();
     
-    // FIXED: Added yAxisIDs and spanGaps: true to all datasets
     charts[sid] = new Chart(ctx, {
       type: "line",
       data: {
         labels: labels,
         datasets: [
-          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3, yAxisID: 'yFlow', spanGaps: true },
-          { label: "Gage (ft)", data: gageSeries, borderColor: "rgba(255, 165, 0, 1)", backgroundColor: "rgba(255, 165, 0, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3, yAxisID: 'yGage', spanGaps: true },
-          { label: "Temp (°F)", data: tempSeries, borderColor: "rgba(128, 0, 128, 1)", backgroundColor: "rgba(128, 0, 128, 0.1)", borderWidth: 1, pointRadius: 0, tension: 0.3, yAxisID: 'yTemp', spanGaps: true }
+          // FIXED: Increased borderWidth and pointRadius so the daily data points actually render on screen
+          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yFlow', spanGaps: true },
+          { label: "Gage (ft)", data: gageSeries, borderColor: "rgba(255, 165, 0, 1)", backgroundColor: "rgba(255, 165, 0, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yGage', spanGaps: true },
+          { label: "Temp (°F)", data: tempSeries, borderColor: "rgba(128, 0, 128, 1)", backgroundColor: "rgba(128, 0, 128, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yTemp', spanGaps: true }
         ]
       },
       options: {
@@ -270,7 +267,6 @@ async function loadStation(station) {
         },
         scales: { 
           x: { display: false }, 
-          // FIXED: Created independent Y-axes so smaller values aren't squashed
           yFlow: { type: 'linear', display: false, position: 'left' },
           yGage: { type: 'linear', display: false, position: 'right' },
           yTemp: { type: 'linear', display: false, position: 'right' }
@@ -298,7 +294,6 @@ async function loadAll() {
   status.textContent = "All stations loaded. Refresh whenever you like.";
 }
 
-// Automatically load stations on page load
 loadAll();
 </script>
 </body>
