@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SLV Streams Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
   h1 { font-size: 1.4em; margin: 10px 0; }
@@ -28,8 +28,18 @@
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   canvas { width: 100% !important; height: 140px !important; margin-top: 6px; }
 </style>
+</head>
+<body>
+
+<h1>SLV Streams Dashboard</h1>
+<div id="controls">
+  <button onclick="loadAll()">Refresh Now</button>
+  <div id="status">Tap “Refresh Now” to load latest data.</div>
+</div>
+<div id="streams"></div>
+
 <script>
-  const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
+const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
 
 const stations = [
   { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
@@ -46,7 +56,6 @@ const stations = [
   { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" }
 ];
 
-// FIXED: Automatically sort stations alphabetically by name
 stations.sort((a, b) => a.name.localeCompare(b.name));
 
 const PARAMS = {
@@ -170,125 +179,4 @@ async function loadStation(station) {
     
     let histTemp = await fetchDWRHistory(sid, "WTR_TEMP").catch(() => []);
     if (!histTemp.length) {
-      histTemp = await fetchDWRHistory(sid, "WATERTEMP").catch(() => []);
-    }
-
-    const flow = getLatestAndPrev(histFlow);
-    const gage = getLatestAndPrev(histGage);
-    const temp = getLatestAndPrev(histTemp);
-
-    const flow24 = value24hAgo(histFlow, flow.latestTime);
-    const gage24 = value24hAgo(histGage, gage.latestTime);
-    const temp24 = value24hAgo(histTemp, temp.latestTime);
-
-    const flowPct = percentChange(flow.latestValue, flow24);
-    const gagePct = percentChange(gage.latestValue, gage24);
-    const tempPct = percentChange(temp.latestValue, temp24);
-
-    let rapidAlert = "";
-    if (flow.latestValue != null && flow.prevValue != null) {
-      const risePct = percentChange(flow.latestValue, flow.prevValue);
-      if (risePct != null && risePct > 5) {
-        rapidAlert = `⚠ Rapid rise in flow: ${risePct.toFixed(1)}% increase since last reading.`;
-      }
-    }
-
-    function updateRow(paramKey, data, pct) {
-      const row = document.getElementById(`row-${sid}-${paramKey}`);
-      const meta = PARAMS[paramKey];
-      const trend = trendInfo(data.latestValue, data.prevValue);
-      const badgeCls = badgeClass(pct);
-      const badgeText = formatPct(pct);
-      const valText = data.latestValue != null ? data.latestValue.toFixed(2) : "—";
-      row.innerHTML = `
-        <span class="label">${meta.label}:</span>
-        <span class="value ${trend.cls}">${valText} ${meta.unit} ${trend.arrow}</span>
-        <span class="${badgeCls}">${badgeText}</span>
-      `;
-    }
-
-    updateRow("DISCHRG", flow, flowPct);
-    updateRow("GAGE_HT", gage, gagePct);
-    updateRow("WTR_TEMP", temp, tempPct);
-
-    const updated = document.getElementById(`updated-${sid}`);
-    updated.textContent = flow.latestTime ? `Updated: ${flow.latestTime}` : "";
-
-    const alertDiv = document.getElementById(`alert-${sid}`);
-    if (rapidAlert) {
-      alertDiv.style.display = "block";
-      alertDiv.textContent = rapidAlert;
-    } else {
-      alertDiv.style.display = "none";
-    }
-
-    const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
-    
-    const allTimes = new Set();
-    histFlow.forEach(h => { if(h.time) allTimes.add(h.time) });
-    histGage.forEach(h => { if(h.time) allTimes.add(h.time) });
-    histTemp.forEach(h => { if(h.time) allTimes.add(h.time) });
-    const labels = Array.from(allTimes).sort((a, b) => new Date(a) - new Date(b));
-
-    function mapToLabels(labels, series) {
-      const map = {};
-      series.forEach(s => { if(s.time) map[s.time] = s.value; });
-      return labels.map(t => map[t] ?? null);
-    }
-    
-    const flowSeries = mapToLabels(labels, histFlow);
-    const gageSeries = mapToLabels(labels, histGage);
-    const tempSeries = mapToLabels(labels, histTemp);
-
-    if (charts[sid]) charts[sid].destroy();
-    
-    charts[sid] = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: labels,
-        datasets: [
-          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yFlow', spanGaps: true },
-          { label: "Gage (ft)", data: gageSeries, borderColor: "rgba(255, 165, 0, 1)", backgroundColor: "rgba(255, 165, 0, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yGage', spanGaps: true },
-          { label: "Temp (°F)", data: tempSeries, borderColor: "rgba(128, 0, 128, 1)", backgroundColor: "rgba(128, 0, 128, 0.1)", borderWidth: 2, pointRadius: 2, tension: 0.3, yAxisID: 'yTemp', spanGaps: true }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: true, labels: { boxWidth: 10, font: { size: 9 } } },
-          tooltip: { mode: "index", intersect: false }
-        },
-        scales: { 
-          x: { display: false }, 
-          yFlow: { type: 'linear', display: false, position: 'left' },
-          yGage: { type: 'linear', display: false, position: 'right' },
-          yTemp: { type: 'linear', display: false, position: 'right' }
-        }
-      }
-    });
-    status.textContent = "";
-  } catch (e) {
-    const card = document.getElementById(`card-${sid}`);
-    const errDiv = document.createElement("div");
-    errDiv.style.color = "#b00000";
-    errDiv.style.fontSize = "0.85em";
-    errDiv.textContent = "Error loading data.";
-    card.appendChild(errDiv);
-    console.error("Error loading station", sid, e);
-  }
-}
-
-async function loadAll() {
-  const status = document.getElementById("status");
-  status.textContent = "Loading all stations...";
-  for (const s of stations) {
-    await loadStation(s);
-  }
-  status.textContent = "All stations loaded. Refresh whenever you like.";
-}
-
-loadAll();
-</script>
-</body>
-</html>
+      histTemp = await fetchDWRHistory(sid, "WAT
