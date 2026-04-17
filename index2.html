@@ -15,7 +15,12 @@
   #status { font-size: 0.85em; color: #555; }
   #streams { transition: opacity 0.3s ease; }
   .card { background: white; padding: 12px; margin-bottom: 12px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+  
+  /* FIXED: Added styling for the clickable names */
   .name { font-size: 1.05em; font-weight: bold; margin-bottom: 4px; }
+  .name a { color: #0077cc; text-decoration: none; }
+  .name a:hover { text-decoration: underline; }
+  
   .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 4px; }
   .label { font-weight: bold; }
   .value { font-weight: bold; }
@@ -139,9 +144,11 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
-  // Removed Gage and Temp rows to keep the UI clean
+  // FIXED: Wrapped the station name in a clickable hyperlink
   card.innerHTML = `
-    <div class="name">${s.name}</div>
+    <div class="name">
+      <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
+    </div>
     <div class="row" id="row-${s.id}-DISCHRG"></div>
     <div class="updated" id="updated-${s.id}"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
@@ -168,7 +175,6 @@ function value24hAgo(history, latestTime) {
 async function loadStation(station) {
   const sid = station.id;
   try {
-    // Only fetching Flow data now (1 API Call per station)
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
 
     const flow = getLatestAndPrev(histFlow);
