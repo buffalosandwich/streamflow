@@ -27,21 +27,10 @@
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   canvas { width: 100% !important; height: 140px !important; margin-top: 6px; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-<h1>SLV Streams Dashboard</h1>
-<div id="controls">
-  <button onclick="loadAll()">Refresh Now</button>
-  <div id="status">Tap “Refresh Now” to load latest data.</div>
-</div>
-<div id="streams"></div>
-
-<script>
 const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
 
 const stations = [
-  { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
+ 
   { id: "ARKSALCO", name: "Arkansas River at Salida, CO" },
   { id: "ALABELCO", name: "Alamosa River Below Terrace Reservoir" },
   { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
@@ -49,10 +38,11 @@ const stations = [
   { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
   { id: "CONMOGCO", name: "Conejos River Near Mogote" },
   { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
+  { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
   { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
   { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
   { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" },
-  { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" } // Added Trinchera
+  { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" }
 ];
 
 const PARAMS = {
@@ -61,11 +51,12 @@ const PARAMS = {
   WTR_TEMP: { label: "Temp", unit: "°F" }
 };
 
+// FIXED: Mapped exactly to DWR's spelling from your screenshot
 const DWR_PARAM_MAP = {
   DISCHRG: "DISCHRG",
   GAGE_HT: "GAGE_HT",  
-  WTR_TEMP: "WTR_TEMP", 
-  WATERTEMP: "WATERTEMP"
+  WTR_TEMP: "WATTEMP", 
+  WATERTEMP: "WATERTEMP" // Keeping this just in case other stations use the alternative
 };
 
 function fmtDate(date) {
@@ -174,9 +165,10 @@ async function loadStation(station) {
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
     const histGage = await fetchDWRHistory(sid, "GAGE_HT").catch(() => []);
     
-    // Attempt standard WTR_TEMP first, fallback to WATERTEMP if empty
+    // Attempt the exact 'WATTEMP' spelling first
     let histTemp = await fetchDWRHistory(sid, "WTR_TEMP").catch(() => []);
     if (!histTemp.length) {
+      // Fallback to WATERTEMP if WATTEMP returns nothing
       histTemp = await fetchDWRHistory(sid, "WATERTEMP").catch(() => []);
     }
 
