@@ -24,13 +24,15 @@
   .trend-up { color: #008000; }
   .trend-down { color: #cc0000; }
   .trend-flat { color: #555555; }
-  .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; margin-left: 4px; color: white; }
+  
+  /* Badge styling remains the same, we are just moving where they render */
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; margin-left: 2px; margin-right: 2px; color: white; }
   .badge-pos { background: #2e8b57; }
   .badge-neg { background: #b22222; }
   .badge-zero { background: #777777; }
   
-  /* FIXED: Added styling for our new plain-English insights sentence */
-  .insights { font-size: 0.82em; color: #555; margin-bottom: 6px; font-style: italic; }
+  /* Adjusted insights styling slightly so the badges fit nicely inline */
+  .insights { font-size: 0.85em; color: #444; margin-bottom: 8px; margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px;}
   
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
@@ -86,19 +88,6 @@ function percentChange(current, past) {
   return ((current - past) / past) * 100;
 }
 
-function badgeClass(pct) {
-  if (pct == null) return "badge badge-zero";
-  if (pct > 1) return "badge badge-pos";
-  if (pct < -1) return "badge badge-neg";
-  return "badge badge-zero";
-}
-
-function formatPct(pct) {
-  if (pct == null) return "n/a";
-  const v = pct.toFixed(1);
-  return (pct > 0 ? "+" : "") + v + "%";
-}
-
 function trendInfo(current, prev) {
   if (current == null || prev == null) return { arrow: "→", cls: "trend-flat" };
   if (current > prev * 1.01) return { arrow: "↑", cls: "trend-up" };
@@ -149,7 +138,6 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
-  // FIXED: Added an insights div directly beneath the data row
   card.innerHTML = `
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
@@ -165,11 +153,10 @@ stations.forEach(s => {
 
 const charts = {};
 
-// FIXED: Upgraded function to rewind exactly 'X' days into the past
 function valueAtTarget(history, latestTime, days) {
   if (!history.length || !latestTime) return null;
   const target = new Date(latestTime).getTime() - (days * 24 * 60 * 60 * 1000);
-  let best = history[0]; // Safely default to the oldest record available
+  let best = history[0]; 
   for (const h of history) {
     const t = new Date(h.time).getTime();
     if (t <= target) best = h;
@@ -178,13 +165,13 @@ function valueAtTarget(history, latestTime, days) {
   return best ? best.value : null;
 }
 
-// FIXED: Small helper to format positive/negative percents into english
-function compareText(pct, label) {
-  if (pct == null) return `n/a ${label}`;
+// FIXED: Now returns an actual HTML badge element instead of plain text
+function formatBadgeHTML(pct) {
+  if (pct == null) return `<span class="badge badge-zero">n/a</span>`;
   const v = Math.abs(pct).toFixed(1);
-  if (pct > 0.1) return `${v}% higher than ${label}`;
-  if (pct < -0.1) return `${v}% lower than ${label}`;
-  return `unchanged from ${label}`;
+  const sign = pct > 0.1 ? "+" : (pct < -0.1 ? "-" : "");
+  const cls = pct > 0.1 ? "badge-pos" : (pct < -0.1 ? "badge-neg" : "badge-zero");
+  return `<span class="badge ${cls}">${sign}${v}%</span>`;
 }
 
 async function loadStation(station) {
@@ -194,12 +181,10 @@ async function loadStation(station) {
 
     const flow = getLatestAndPrev(histFlow);
     
-    // Grab the values from 10 days, 5 days, and 1 day ago
     const flow10 = valueAtTarget(histFlow, flow.latestTime, 10);
     const flow5 = valueAtTarget(histFlow, flow.latestTime, 5);
     const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
 
-    // Calculate the percentage shifts
     const pct10 = percentChange(flow.latestValue, flow10);
     const pct5 = percentChange(flow.latestValue, flow5);
     const pct1 = percentChange(flow.latestValue, flow1);
@@ -212,32 +197,29 @@ async function loadStation(station) {
       }
     }
 
-    function updateRow(paramKey, data, pct) {
+    // FIXED: Removed the single badge block from the main row
+    function updateRow(paramKey, data) {
       const row = document.getElementById(`row-${sid}-${paramKey}`);
       const meta = PARAMS[paramKey];
       const trend = trendInfo(data.latestValue, data.prevValue);
-      const badgeCls = badgeClass(pct);
-      const badgeText = formatPct(pct);
       const valText = data.latestValue != null ? data.latestValue.toFixed(2) : "—";
       
       row.innerHTML = `
         <span class="label">${meta.label}:</span>
         <span class="value ${trend.cls}">${valText} ${meta.unit} ${trend.arrow}</span>
-        <span class="${badgeCls}">${badgeText}</span>
       `;
     }
 
-    // Pass the 1-day percentage to the main row so the badge still shows yesterday's change
-    updateRow("DISCHRG", flow, pct1);
+    updateRow("DISCHRG", flow);
     
-    // Construct and inject the plain-english sentence
-    const txt10 = compareText(pct10, "10 days ago");
-    const txt5 = compareText(pct5, "5 days ago");
-    const txt1 = compareText(pct1, "yesterday");
+    // FIXED: Generate the inline HTML badges and string them together
+    const b10 = formatBadgeHTML(pct10);
+    const b5 = formatBadgeHTML(pct5);
+    const b1 = formatBadgeHTML(pct1);
     
     const insightsDiv = document.getElementById(`insights-${sid}`);
-    let sentence = `${txt10}, ${txt5}, and ${txt1}.`;
-    insightsDiv.textContent = sentence.charAt(0).toUpperCase() + sentence.slice(1);
+    // Using innerHTML so the browser renders the spans as actual visual badges
+    insightsDiv.innerHTML = `${b10} vs 10 days ago, ${b5} vs 5 days ago, and ${b1} vs yesterday.`;
 
     const updated = document.getElementById(`updated-${sid}`);
     updated.textContent = flow.latestTime ? `Updated: ${flow.latestTime}` : "";
