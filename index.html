@@ -31,6 +31,11 @@
   
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   .chart-wrapper { position: relative; height: 180px; width: 100%; margin-top: 6px; }
+  
+  #legend { margin-top: 20px; padding: 15px; background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+  #legend h2 { font-size: 1.1em; margin-top: 0; }
+  .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9em; }
+  .box { width: 20px; height: 20px; border-radius: 4px; margin-right: 10px; }
 </style>
 </head>
 <body>
@@ -41,6 +46,13 @@
   <div id="status">Loading dashboard for the first time...</div>
 </div>
 <div id="streams"></div>
+
+<div id="legend">
+  <h2>Understanding River Conditions</h2>
+  <div class="legend-item"><div class="box" style="background: #d4edda;"></div> <strong>Green (&lt; 5% change):</strong> Stable. Conditions are generally predictable.</div>
+  <div class="legend-item"><div class="box" style="background: #fff3cd;"></div> <strong>Yellow (5% - 15% change):</strong> Shifting. Exercise caution; rising or falling pace is moderate.</div>
+  <div class="legend-item"><div class="box" style="background: #f8d7da;"></div> <strong>Red (&gt; 15% change):</strong> Volatile. High water or rapid change; potentially dangerous.</div>
+</div>
 
 <script>
 Chart.register(ChartDataLabels);
@@ -156,20 +168,18 @@ async function loadStation(station) {
     const pct1Flow = percentChange(flow.latestValue, flow1);
     const pct7Flow = percentChange(flow.latestValue, flow7);
 
-    // Flow Story
     const flowGuideDiv = document.getElementById(`flow-guide-${sid}`);
     if (flow.latestValue != null && flow1 != null && flow7 != null) {
-      const absPct1 = Math.abs(pct1Flow).toFixed(1);
+      const absPct1 = Math.round(Math.abs(pct1Flow)); // Rounded
       const moreLess = pct1Flow >= 0 ? "more" : "less";
-      const absPct7 = Math.abs(pct7Flow).toFixed(1);
+      const absPct7 = Math.round(Math.abs(pct7Flow)); // Rounded
       const increasedDecreased = pct7Flow >= 0 ? "increased" : "decreased";
       const themeClass = Math.abs(pct1Flow) > 15 ? "story-red" : (Math.abs(pct1Flow) >= 5 ? "story-yellow" : "story-green");
       flowGuideDiv.className = `flow-guide ${themeClass}`;
       flowGuideDiv.style.display = "block";
-      flowGuideDiv.innerHTML = `<strong>Current Flow: ${flow.latestValue.toFixed(2)} cfs,</strong> this is <strong>${absPct1}% ${moreLess}</strong> than yesterday and has <strong>${increasedDecreased} ${absPct7}%</strong> since last week.`;
+      flowGuideDiv.innerHTML = `<strong>Current Flow: ${Math.round(flow.latestValue)} cfs,</strong> this is <strong>${absPct1}% ${moreLess}</strong> than yesterday and has <strong>${increasedDecreased} ${absPct7}%</strong> since last week.`;
     }
 
-    // Gauge Story
     const storyGuideDiv = document.getElementById(`story-guide-${sid}`);
     const gage = getLatestAndPrev(histGage);
     const gage1 = valueAtTarget(histGage, gage.latestTime, 1);
@@ -184,10 +194,15 @@ async function loadStation(station) {
       const themeClass = Math.abs(pct1Gage) > 15 ? "story-red" : (Math.abs(pct1Gage) >= 5 ? "story-yellow" : "story-green");
       storyGuideDiv.className = `story-guide ${themeClass}`;
       storyGuideDiv.style.display = "block";
-      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${Math.abs(pct1Gage).toFixed(1)}%</strong>, which is <strong>${Math.abs(pct7Gage).toFixed(1)}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
+      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(1)} ft:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${Math.round(Math.abs(pct1Gage))}%</strong>, which is <strong>${Math.round(Math.abs(pct7Gage))}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
     }
 
-    // Chart
+    const alertDiv = document.getElementById(`alert-${sid}`);
+    if (flow.latestValue != null && flow.prevValue != null && percentChange(flow.latestValue, flow.prevValue) >= 10) {
+      alertDiv.style.display = "block";
+      alertDiv.textContent = `⚠ Rapid rise in flow: ${Math.round(percentChange(flow.latestValue, flow.prevValue))}% increase.`;
+    } else { alertDiv.style.display = "none"; }
+
     const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
     const dailyFlow = [], seenDates = new Set(), gageMap = {};
     for (const h of histGage) if (h.time && h.value !== null) gageMap[new Date(h.time).toLocaleDateString()] = h.value;
@@ -206,10 +221,10 @@ async function loadStation(station) {
     charts[sid] = new Chart(ctx, {
       type: "line",
       data: {
-        labels: dailyFlow.map(d => `${new Date(histFlow.find(h => new Date(h.time).toLocaleDateString() === d.dateStr).time).getMonth() + 1}/${new Date(histFlow.find(h => new Date(h.time).toLocaleDateString() === d.dateStr).time).getDate()}`),
+        labels: dailyFlow.map(d => `${new Date(d.dateStr).getMonth() + 1}/${new Date(d.dateStr).getDate()}`),
         datasets: [
-          { label: "Flow", data: flowSeries, borderColor: "#0077cc", borderWidth: 2, tension: 0.3, yAxisID: 'yFlow', datalabels: { align: 'bottom', anchor: 'bottom', font: { size: 10, weight: 'bold' }, formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 0.1 ? '' : (pct>0 ? '+' : '') + pct.toFixed(1) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 0.1 ? '#2e8b57' : (pct < -0.1 ? '#b22222' : '#777'); } } },
-          { label: "Gauge", data: gageSeries, borderColor: "#6c757d", borderDash: [5, 5], borderWidth: 2, tension: 0.3, yAxisID: 'yGage', datalabels: { align: 'top', anchor: 'top', font: { size: 10, weight: 'bold' }, color: '#6c757d', formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 0.1 ? '' : (pct>0 ? '+' : '') + pct.toFixed(1) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 0.1 ? '#2e8b57' : (pct < -0.1 ? '#b22222' : '#777'); } } }
+          { label: "Flow", data: flowSeries, borderColor: "#0077cc", borderWidth: 2, tension: 0.3, yAxisID: 'yFlow', datalabels: { align: 'bottom', anchor: 'bottom', font: { size: 10, weight: 'bold' }, formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 1 ? '' : (pct>0 ? '+' : '') + Math.round(pct) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 1 ? '#2e8b57' : (pct < -1 ? '#b22222' : '#777'); } } },
+          { label: "Gauge", data: gageSeries, borderColor: "#6c757d", borderDash: [5, 5], borderWidth: 2, tension: 0.3, yAxisID: 'yGage', datalabels: { align: 'top', anchor: 'top', font: { size: 10, weight: 'bold' }, color: '#6c757d', formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 1 ? '' : (pct>0 ? '+' : '') + Math.round(pct) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 1 ? '#2e8b57' : (pct < -1 ? '#b22222' : '#777'); } } }
         ]
       },
       options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 25, bottom: 20 } }, plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false } }, scales: { x: { display: true }, yFlow: { type: 'linear', display: true, position: 'left', beginAtZero: true, title: { display: true, text: 'cfs', color: '#0077cc' } }, yGage: { type: 'linear', display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'feet', color: '#6c757d' } } } }
