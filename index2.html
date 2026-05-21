@@ -28,13 +28,21 @@
   .badge-neg { background: #b22222; }
   .badge-zero { background: #777777; }
   
-  .story-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
-  .story-guide strong { color: #004085; }
+  /* FIXED: Set up base story guide styling, plus the 3 color variations */
+  .story-guide { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid transparent; }
+  
+  .story-green { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+  .story-green strong { color: #0b2e13; }
+  
+  .story-yellow { background: #fff3cd; color: #856404; border-color: #ffeeba; }
+  .story-yellow strong { color: #533f03; }
+  
+  .story-red { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+  .story-red strong { color: #4c1118; }
   
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   
-  /* FIXED: The proper way to size Chart.js to prevent blurry/squished text */
   .chart-wrapper { position: relative; height: 160px; width: 100%; margin-top: 6px; }
 </style>
 </head>
@@ -133,7 +141,6 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
-  // Removed Wade Guide, wrapped canvas in .chart-wrapper
   card.innerHTML = `
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
@@ -226,9 +233,20 @@ async function loadStation(station) {
       const absPct7 = Math.abs(pct7Gage).toFixed(1);
       const upDown7 = pct7Gage >= 0 ? "up" : "down";
 
-      storyGuideDiv.className = "story-guide";
+      // FIXED: Assign the correct color class based on the absolute percentage change
+      const absPctNum = Math.abs(pct1Gage);
+      let themeClass = "story-green"; // Defaults to green (< 5%)
+      
+      if (absPctNum > 15) {
+        themeClass = "story-red";
+      } else if (absPctNum >= 5) {
+        themeClass = "story-yellow";
+      }
+
+      // FIXED: Removed the emoji, added dynamic class
+      storyGuideDiv.className = `story-guide ${themeClass}`;
       storyGuideDiv.style.display = "inline-block";
-      storyGuideDiv.innerHTML = `📏 <strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The river is <strong>${upDown1} ${absDiffFeet} feet</strong> since yesterday and has ${dropRise1} <strong>${absPct1}%</strong> in the last day, <strong>${absPct7}% ${upDown7}</strong> from last week.`;
+      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The river is <strong>${upDown1} ${absDiffFeet} feet</strong> since yesterday and has ${dropRise1} <strong>${absPct1}%</strong> in the last day, <strong>${absPct7}% ${upDown7}</strong> from last week.`;
     }
 
     const updated = document.getElementById(`updated-${sid}`);
@@ -291,7 +309,6 @@ async function loadStation(station) {
             align: 'top', 
             anchor: 'end', 
             offset: 4,    
-            // FIXED: Set a crisp system font and added a white stroke so it pops against lines
             font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
             textStrokeColor: 'rgba(255, 255, 255, 0.9)',
             textStrokeWidth: 3,
