@@ -20,15 +20,9 @@
   .name a { color: #0077cc; text-decoration: none; }
   .name a:hover { text-decoration: underline; }
   .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 6px; align-items: center; }
-  .label { font-weight: bold; }
-  .value { font-weight: bold; color: #333; display: flex; align-items: center;}
   
-  .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.85em; margin-left: 4px; margin-right: 4px; color: white; font-weight: normal; }
-  .badge-pos { background: #2e8b57; }
-  .badge-neg { background: #b22222; }
-  .badge-zero { background: #777777; }
-  
-  .story-guide { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid transparent; }
+  /* FIXED: Added flow-guide styling to match gauge-guide */
+  .flow-guide, .story-guide { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid transparent; }
   .story-green { background: #d4edda; color: #155724; border-color: #c3e6cb; }
   .story-green strong { color: #0b2e13; }
   .story-yellow { background: #fff3cd; color: #856404; border-color: #ffeeba; }
@@ -37,7 +31,6 @@
   .story-red strong { color: #4c1118; }
   
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
-  
   .chart-wrapper { position: relative; height: 180px; width: 100%; margin-top: 6px; }
 </style>
 </head>
@@ -74,7 +67,7 @@ const stations = [
 stations.sort((a, b) => a.name.localeCompare(b.name));
 
 const PARAMS = {
-  DISCHRG: { label: "Current Flow", unit: "cfs" }
+  DISCHRG: { label: "Current Flow" }
 };
 
 const DWR_PARAM_MAP = {
@@ -141,7 +134,7 @@ stations.forEach(s => {
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
     </div>
-    <div class="row" id="row-${s.id}-DISCHRG"></div>
+    <div id="flow-guide-${s.id}" style="display:none;"></div>
     <div id="story-guide-${s.id}" style="display:none;"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
     <div class="chart-wrapper">
@@ -165,15 +158,6 @@ function valueAtTarget(history, latestTime, days) {
   return best ? best.value : null;
 }
 
-function formatBadgeHTML(pct) {
-  if (pct == null) return `<span class="badge badge-zero">n/a</span>`;
-  const v = Math.abs(pct).toFixed(1);
-  const sign = pct > 0.1 ? "+" : (pct < -0.1 ? "-" : "");
-  const cls = pct > 0.1 ? "badge-pos" : (pct < -0.1 ? "badge-neg" : "badge-zero");
-  return `<span class="badge ${cls}">${sign}${v}%</span>`;
-}
-
-// FIXED: Helper to convert decimal feet to "X feet Y inches"
 function formatInches(feet) {
   let inches = Math.round(Math.abs(feet) * 12);
   if (inches === 0) return "0 inches";
@@ -195,35 +179,31 @@ async function loadStation(station) {
 
     const flow = getLatestAndPrev(histFlow);
     const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
-    const pct1 = percentChange(flow.latestValue, flow1);
-
-    let rapidAlert = "";
-    if (flow.latestValue != null && flow.prevValue != null) {
-      const risePct = percentChange(flow.latestValue, flow.prevValue);
-      if (risePct != null && risePct >= 10) {
-        rapidAlert = `⚠ Rapid rise in flow: ${risePct.toFixed(1)}% increase since last reading.`;
-      }
-    }
-
-    function updateRow(paramKey, data, pctOneDay) {
-      const row = document.getElementById(`row-${sid}-${paramKey}`);
-      const meta = PARAMS[paramKey];
-      const valText = data.latestValue != null ? data.latestValue.toFixed(2) : "—";
-      
-      let friendlyText = "";
-      if (pctOneDay != null) {
-        const badge = formatBadgeHTML(pctOneDay);
-        friendlyText = `→ ${badge} from yesterday`;
-      }
-      
-      row.innerHTML = `
-        <span class="label">${meta.label}:</span>
-        <span class="value">${valText} ${meta.unit} <span style="font-weight: normal; color: #555; font-size: 0.95em; margin-left: 4px;">${friendlyText}</span></span>
-      `;
-    }
-
-    updateRow("DISCHRG", flow, pct1);
+    const flow7 = valueAtTarget(histFlow, flow.latestTime, 7);
     
+    const pct1Flow = percentChange(flow.latestValue, flow1);
+    const pct7Flow = percentChange(flow.latestValue, flow7);
+
+    // Flow Story Logic
+    const flowGuideDiv = document.getElementById(`flow-guide-${sid}`);
+    if (flow.latestValue != null && flow1 != null && flow7 != null) {
+      const absPct1 = Math.abs(pct1Flow).toFixed(1);
+      const moreLess = pct1Flow >= 0 ? "more" : "less";
+      
+      const absPct7 = Math.abs(pct7Flow).toFixed(1);
+      const increasedDecreased = pct7Flow >= 0 ? "increased" : "decreased";
+
+      const absPct1Num = Math.abs(pct1Flow);
+      let themeClass = "story-green";
+      if (absPct1Num > 15) themeClass = "story-red";
+      else if (absPct1Num >= 5) themeClass = "story-yellow";
+
+      flowGuideDiv.className = `flow-guide ${themeClass}`;
+      flowGuideDiv.style.display = "block";
+      flowGuideDiv.innerHTML = `<strong>Current Flow: ${flow.latestValue.toFixed(2)} cfs,</strong> this is <strong>${absPct1}% ${moreLess}</strong> than yesterday and has <strong>${increasedDecreased} ${absPct7}%</strong> since last week.`;
+    }
+
+    // Gauge Story Logic
     const storyGuideDiv = document.getElementById(`story-guide-${sid}`);
     const gage = getLatestAndPrev(histGage);
     const gage1 = valueAtTarget(histGage, gage.latestTime, 1);
@@ -231,7 +211,7 @@ async function loadStation(station) {
 
     if (gage.latestValue != null && gage1 != null && gage7 != null) {
       const diffFeet = gage.latestValue - gage1;
-      const formattedInches = formatInches(diffFeet); // FIXED: Using new helper here
+      const formattedInches = formatInches(diffFeet);
       const higherLower1 = diffFeet >= 0 ? "higher" : "lower";
       
       const pct1Gage = percentChange(gage.latestValue, gage1);
@@ -243,25 +223,24 @@ async function loadStation(station) {
       const higherLower7 = pct7Gage >= 0 ? "higher" : "lower";
 
       const absPctNum = Math.abs(pct1Gage);
-      let themeClass = "story-green"; 
-      
-      if (absPctNum > 15) {
-        themeClass = "story-red";
-      } else if (absPctNum >= 5) {
-        themeClass = "story-yellow";
-      }
+      let themeClass = "story-green";
+      if (absPctNum > 15) themeClass = "story-red";
+      else if (absPctNum >= 5) themeClass = "story-yellow";
 
       storyGuideDiv.className = `story-guide ${themeClass}`;
-      storyGuideDiv.style.display = "inline-block";
+      storyGuideDiv.style.display = "block";
       storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${absPct1}%</strong>, which is <strong>${absPct7}% ${higherLower7}</strong> than last week.`;
     }
 
     const alertDiv = document.getElementById(`alert-${sid}`);
-    if (rapidAlert) {
-      alertDiv.style.display = "block";
-      alertDiv.textContent = rapidAlert;
-    } else {
-      alertDiv.style.display = "none";
+    if (flow.latestValue != null && flow.prevValue != null) {
+      const risePct = percentChange(flow.latestValue, flow.prevValue);
+      if (risePct != null && risePct >= 10) {
+        alertDiv.style.display = "block";
+        alertDiv.textContent = `⚠ Rapid rise in flow: ${risePct.toFixed(1)}% increase since last reading.`;
+      } else {
+        alertDiv.style.display = "none";
+      }
     }
 
     const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
@@ -269,28 +248,16 @@ async function loadStation(station) {
     const dailyFlow = [];
     const seenDates = new Set();
     const gageMap = {};
-
-    for (const h of histGage) {
-      if (h.time && h.value !== null) {
-        gageMap[new Date(h.time).toLocaleDateString()] = h.value;
-      }
-    }
-    
+    for (const h of histGage) if (h.time && h.value !== null) gageMap[new Date(h.time).toLocaleDateString()] = h.value;
     for (let i = histFlow.length - 1; i >= 0; i--) {
       if (!histFlow[i].time) continue;
       const dateObj = new Date(histFlow[i].time);
       const dateStr = dateObj.toLocaleDateString();
-      
       if (!seenDates.has(dateStr)) {
         seenDates.add(dateStr);
-        dailyFlow.unshift({
-          timeLabel: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`,
-          dateStr: dateStr,
-          value: histFlow[i].value
-        });
+        dailyFlow.unshift({ timeLabel: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`, dateStr: dateStr, value: histFlow[i].value });
       }
     }
-
     const labels = dailyFlow.map(d => d.timeLabel);
     const flowSeries = dailyFlow.map(d => d.value);
     const gageSeries = dailyFlow.map(d => gageMap[d.dateStr] ?? null);
@@ -306,118 +273,19 @@ async function loadStation(station) {
       data: {
         labels: labels,
         datasets: [
-          { 
-            label: "Flow (cfs)", 
-            data: flowSeries, 
-            borderColor: "rgba(0, 123, 255, 1)", 
-            backgroundColor: "rgba(0, 123, 255, 0.1)", 
-            borderWidth: 2, 
-            pointRadius: 3, 
-            tension: 0.3, 
-            yAxisID: 'yFlow', 
-            spanGaps: true,
-            datalabels: {
-              align: 'bottom', 
-              anchor: 'bottom', 
-              offset: 4,    
-              font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
-              textStrokeColor: 'rgba(255, 255, 255, 0.9)',
-              textStrokeWidth: 3,
-              formatter: function(value, context) {
-                const index = context.dataIndex;
-                if (index === 0) return ''; 
-                
-                const prevValue = context.dataset.data[index - 1];
-                if (!prevValue) return '';
-                
-                const pct = ((value - prevValue) / prevValue) * 100;
-                if (Math.abs(pct) < 0.1) return ''; 
-                
-                const sign = pct > 0 ? '+' : '';
-                return sign + pct.toFixed(1) + '%';
-              },
-              color: function(context) {
-                const index = context.dataIndex;
-                if (index === 0) return '#777'; 
-                
-                const prevValue = context.dataset.data[index - 1];
-                if (!prevValue) return '#777';
-                
-                const pct = ((context.dataset.data[index] - prevValue) / prevValue) * 100;
-                if (pct > 0.1) return '#2e8b57'; 
-                if (pct < -0.1) return '#b22222'; 
-                return '#777'; 
-              }
-            }
-          },
-          { 
-            label: "Gauge (ft)", 
-            data: gageSeries, 
-            borderColor: "rgba(108, 117, 125, 0.8)",
-            backgroundColor: "transparent", 
-            borderDash: [5, 5],
-            borderWidth: 2, 
-            pointRadius: 3, 
-            tension: 0.3, 
-            yAxisID: 'yGage', 
-            spanGaps: true,
-            datalabels: { 
-              display: true,
-              align: 'top', 
-              anchor: 'top', 
-              offset: 4,
-              font: { size: 10, weight: 'bold', family: 'Arial, sans-serif' },
-              color: 'rgba(108, 117, 125, 1)', 
-              textStrokeColor: 'rgba(255, 255, 255, 0.9)',
-              textStrokeWidth: 3,
-              formatter: function(value) {
-                if (value === null || value === undefined) return '';
-                return value.toFixed(2) + ' ft';
-              }
-            }
-          }
+          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'yFlow', spanGaps: true, datalabels: { align: 'bottom', anchor: 'bottom', offset: 4, font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, textStrokeColor: 'rgba(255, 255, 255, 0.9)', textStrokeWidth: 3, formatter: function(value, context) { const index = context.dataIndex; if (index === 0) return ''; const prevValue = context.dataset.data[index - 1]; if (!prevValue) return ''; const pct = ((value - prevValue) / prevValue) * 100; if (Math.abs(pct) < 0.1) return ''; return (pct > 0 ? '+' : '') + pct.toFixed(1) + '%'; }, color: function(context) { const index = context.dataIndex; if (index === 0) return '#777'; const prevValue = context.dataset.data[index - 1]; if (!prevValue) return '#777'; const pct = ((context.dataset.data[index] - prevValue) / prevValue) * 100; if (pct > 0.1) return '#2e8b57'; if (pct < -0.1) return '#b22222'; return '#777'; } } },
+          { label: "Gauge (ft)", data: gageSeries, borderColor: "rgba(108, 117, 125, 0.8)", backgroundColor: "transparent", borderDash: [5, 5], borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'yGage', spanGaps: true, datalabels: { display: true, align: 'top', anchor: 'top', offset: 4, font: { size: 10, weight: 'bold', family: 'Arial, sans-serif' }, color: 'rgba(108, 117, 125, 1)', textStrokeColor: 'rgba(255, 255, 255, 0.9)', textStrokeWidth: 3, formatter: function(value) { if (value === null || value === undefined) return ''; return value.toFixed(2) + ' ft'; } } }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: {
-          padding: { top: 25, bottom: 20 } 
-        },
-        plugins: {
-          legend: { display: false }, 
-          tooltip: { mode: "index", intersect: false }
-        },
+        layout: { padding: { top: 25, bottom: 20 } },
+        plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false } },
         scales: { 
           x: { display: true, ticks: { font: { size: 11, family: 'Arial, sans-serif' } } }, 
-          yFlow: { 
-            type: 'linear', 
-            display: true, 
-            position: 'left',
-            beginAtZero: true,
-            suggestedMax: dynamicYMax,
-            title: {
-              display: true,
-              text: 'cfs',
-              color: 'rgba(0, 123, 255, 1)',
-              font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' }
-            },
-            ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(0, 123, 255, 1)' }
-          },
-          yGage: {
-            type: 'linear', 
-            display: true, 
-            position: 'right',
-            beginAtZero: true,
-            grid: { drawOnChartArea: false },
-            title: {
-              display: true,
-              text: 'feet',
-              color: 'rgba(108, 117, 125, 1)',
-              font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' }
-            },
-            ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(108, 117, 125, 1)' }
-          }
+          yFlow: { type: 'linear', display: true, position: 'left', beginAtZero: true, suggestedMax: dynamicYMax, title: { display: true, text: 'cfs', color: 'rgba(0, 123, 255, 1)', font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' } }, ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(0, 123, 255, 1)' } },
+          yGage: { type: 'linear', display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'feet', color: 'rgba(108, 117, 125, 1)', font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' } }, ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(108, 117, 125, 1)' } }
         }
       }
     });
