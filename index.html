@@ -18,11 +18,11 @@
   .name { font-size: 1.05em; font-weight: bold; margin-bottom: 4px; }
   .name a { color: #0077cc; text-decoration: none; }
   .name a:hover { text-decoration: underline; }
-  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 2px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 2px; align-items: center; }
   .label { font-weight: bold; }
-  .value { font-weight: bold; color: #333; }
+  .value { font-weight: bold; color: #333; display: flex; align-items: center;}
   
-  .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; margin-left: 2px; margin-right: 2px; color: white; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.85em; margin-left: 4px; margin-right: 4px; color: white; font-weight: normal; }
   .badge-pos { background: #2e8b57; }
   .badge-neg { background: #b22222; }
   .badge-zero { background: #777777; }
@@ -184,7 +184,7 @@ async function loadStation(station) {
       }
     }
 
-    // FIXED: Passed the 1-day percentage in to create the friendly text sentence
+    // FIXED: Passed the badge generator directly into the "Current Flow" row
     function updateRow(paramKey, data, pctOneDay) {
       const row = document.getElementById(`row-${sid}-${paramKey}`);
       const meta = PARAMS[paramKey];
@@ -192,18 +192,13 @@ async function loadStation(station) {
       
       let friendlyText = "";
       if (pctOneDay != null) {
-        if (Math.abs(pctOneDay) < 0.1) {
-          friendlyText = `→ unchanged from yesterday`;
-        } else {
-          const dir = pctOneDay > 0 ? "up" : "down";
-          const sign = pctOneDay > 0 ? "+" : "";
-          friendlyText = `→ ${dir} ${sign}${pctOneDay.toFixed(1)}% from yesterday`;
-        }
+        const badge = formatBadgeHTML(pctOneDay);
+        friendlyText = `→ ${badge} from yesterday`;
       }
       
       row.innerHTML = `
         <span class="label">${meta.label}:</span>
-        <span class="value">${valText} ${meta.unit} <span style="font-weight: normal; color: #555; font-size: 0.95em;">${friendlyText}</span></span>
+        <span class="value">${valText} ${meta.unit} <span style="font-weight: normal; color: #555; font-size: 0.95em; margin-left: 4px;">${friendlyText}</span></span>
       `;
     }
 
@@ -213,7 +208,6 @@ async function loadStation(station) {
     const b5 = formatBadgeHTML(pct5);
     
     const insightsDiv = document.getElementById(`insights-${sid}`);
-    // FIXED: Removed the 1-day badge from the secondary insights line
     insightsDiv.innerHTML = `${b10} vs 10 days ago, and ${b5} vs 5 days ago.`;
 
     const updated = document.getElementById(`updated-${sid}`);
