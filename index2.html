@@ -173,6 +173,18 @@ function formatBadgeHTML(pct) {
   return `<span class="badge ${cls}">${sign}${v}%</span>`;
 }
 
+// FIXED: Helper to convert decimal feet to "X feet Y inches"
+function formatInches(feet) {
+  let inches = Math.round(Math.abs(feet) * 12);
+  if (inches === 0) return "0 inches";
+  let f = Math.floor(inches / 12);
+  let i = inches % 12;
+  let parts = [];
+  if (f > 0) parts.push(f + (f === 1 ? " foot" : " feet"));
+  if (i > 0) parts.push(i + (i === 1 ? " inch" : " inches"));
+  return parts.join(" ");
+}
+
 async function loadStation(station) {
   const sid = station.id;
   try {
@@ -218,10 +230,8 @@ async function loadStation(station) {
     const gage7 = valueAtTarget(histGage, gage.latestTime, 7);
 
     if (gage.latestValue != null && gage1 != null && gage7 != null) {
-      // FIXED: Convert feet difference to inches for the story
       const diffFeet = gage.latestValue - gage1;
-      const diffInches = (diffFeet * 12).toFixed(1);
-      const absDiffInches = Math.abs(diffInches);
+      const formattedInches = formatInches(diffFeet); // FIXED: Using new helper here
       const higherLower1 = diffFeet >= 0 ? "higher" : "lower";
       
       const pct1Gage = percentChange(gage.latestValue, gage1);
@@ -243,7 +253,7 @@ async function loadStation(station) {
 
       storyGuideDiv.className = `story-guide ${themeClass}`;
       storyGuideDiv.style.display = "inline-block";
-      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The water is <strong>${absDiffInches} inches ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${absPct1}%</strong>, which is <strong>${absPct7}% ${higherLower7}</strong> than last week.`;
+      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${absPct1}%</strong>, which is <strong>${absPct7}% ${higherLower7}</strong> than last week.`;
     }
 
     const alertDiv = document.getElementById(`alert-${sid}`);
