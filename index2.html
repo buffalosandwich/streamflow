@@ -31,12 +31,11 @@
   .story-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
   .story-guide strong { color: #004085; }
   
-  .wade-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
-  .wade-guide strong { color: #004085; }
-  
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
-  canvas { width: 100% !important; height: 160px !important; margin-top: 6px; }
+  
+  /* FIXED: The proper way to size Chart.js to prevent blurry/squished text */
+  .chart-wrapper { position: relative; height: 160px; width: 100%; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -134,16 +133,18 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
+  // Removed Wade Guide, wrapped canvas in .chart-wrapper
   card.innerHTML = `
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
     </div>
     <div class="row" id="row-${s.id}-DISCHRG"></div>
     <div id="story-guide-${s.id}" style="display:none;"></div>
-    <div id="wade-guide-${s.id}" style="display:none;"></div>
     <div class="updated" id="updated-${s.id}"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
-    <canvas id="chart-${s.id}"></canvas>
+    <div class="chart-wrapper">
+      <canvas id="chart-${s.id}"></canvas>
+    </div>
   `;
   container.appendChild(card);
 });
@@ -230,14 +231,6 @@ async function loadStation(station) {
       storyGuideDiv.innerHTML = `📏 <strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The river is <strong>${upDown1} ${absDiffFeet} feet</strong> since yesterday and has ${dropRise1} <strong>${absPct1}%</strong> in the last day, <strong>${absPct7}% ${upDown7}</strong> from last week.`;
     }
 
-    const wadeGuideDiv = document.getElementById(`wade-guide-${sid}`);
-    if (flow.latestValue != null && flow.latestValue > 0) {
-      const minSafeWidth = Math.ceil(flow.latestValue / 10);
-      wadeGuideDiv.className = "wade-guide";
-      wadeGuideDiv.style.display = "inline-block";
-      wadeGuideDiv.innerHTML = `🦺 <strong>Wading Guide:</strong> Unsafe to wade if the channel is narrower than <strong>${minSafeWidth} feet</strong> here.`;
-    }
-
     const updated = document.getElementById(`updated-${sid}`);
     updated.textContent = flow.latestTime ? `Updated: ${flow.latestTime}` : "";
 
@@ -271,7 +264,6 @@ async function loadStation(station) {
     const labels = dailyFlow.map(d => d.timeLabel);
     const flowSeries = dailyFlow.map(d => d.value);
 
-    // FIXED: Calculate the top 10% ceiling for the Y-Axis
     const validFlows = flowSeries.filter(val => val !== null);
     const maxFlow = validFlows.length > 0 ? Math.max(...validFlows) : 10;
     const dynamicYMax = maxFlow + (maxFlow * 0.10);
@@ -299,7 +291,10 @@ async function loadStation(station) {
             align: 'top', 
             anchor: 'end', 
             offset: 4,    
-            font: { size: 12, weight: 'bold' }, 
+            // FIXED: Set a crisp system font and added a white stroke so it pops against lines
+            font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
+            textStrokeColor: 'rgba(255, 255, 255, 0.9)',
+            textStrokeWidth: 3,
             formatter: function(value, context) {
               const index = context.dataIndex;
               if (index === 0) return ''; 
@@ -328,15 +323,14 @@ async function loadStation(station) {
           }
         },
         scales: { 
-          x: { display: true, ticks: { font: { size: 12 } } }, 
-          // FIXED: Enabled the left Y-Axis, set it to start at 0, and applied our 10% headroom calculation
+          x: { display: true, ticks: { font: { size: 11, family: 'Arial, sans-serif' } } }, 
           yFlow: { 
             type: 'linear', 
             display: true, 
             position: 'left',
             beginAtZero: true,
             suggestedMax: dynamicYMax,
-            ticks: { font: { size: 11 } }
+            ticks: { font: { size: 11, family: 'Arial, sans-serif' } }
           }
         }
       }
