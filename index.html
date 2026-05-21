@@ -170,9 +170,9 @@ async function loadStation(station) {
 
     const flowGuideDiv = document.getElementById(`flow-guide-${sid}`);
     if (flow.latestValue != null && flow1 != null && flow7 != null) {
-      const absPct1 = Math.round(Math.abs(pct1Flow)); // Rounded
+      const absPct1 = Math.round(Math.abs(pct1Flow));
       const moreLess = pct1Flow >= 0 ? "more" : "less";
-      const absPct7 = Math.round(Math.abs(pct7Flow)); // Rounded
+      const absPct7 = Math.round(Math.abs(pct7Flow));
       const increasedDecreased = pct7Flow >= 0 ? "increased" : "decreased";
       const themeClass = Math.abs(pct1Flow) > 15 ? "story-red" : (Math.abs(pct1Flow) >= 5 ? "story-yellow" : "story-green");
       flowGuideDiv.className = `flow-guide ${themeClass}`;
@@ -194,7 +194,8 @@ async function loadStation(station) {
       const themeClass = Math.abs(pct1Gage) > 15 ? "story-red" : (Math.abs(pct1Gage) >= 5 ? "story-yellow" : "story-green");
       storyGuideDiv.className = `story-guide ${themeClass}`;
       storyGuideDiv.style.display = "block";
-      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(1)} ft:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${Math.round(Math.abs(pct1Gage))}%</strong>, which is <strong>${Math.round(Math.abs(pct7Gage))}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
+      // FIXED: Using formatInches for the current gauge reading too
+      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${formatInches(gage.latestValue)}:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${Math.round(Math.abs(pct1Gage))}%</strong>, which is <strong>${Math.round(Math.abs(pct7Gage))}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
     }
 
     const alertDiv = document.getElementById(`alert-${sid}`);
