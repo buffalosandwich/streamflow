@@ -78,7 +78,7 @@ const stations = [
 stations.sort((a, b) => a.name.localeCompare(b.name));
 
 const PARAMS = { DISCHRG: { label: "Current Flow" } };
-const DWR_PARAM_MAP = { DISCHRG: "DISCHRG", GAGE_HT: "GAGE_HT", GAGE_HT2: "GAGE_HT2" };
+const DWR_PARAM_MAP = { DISCHRG: "DISCHRG", GAGE_HT: "GAGE_HT", GAGE_HT2: "GAGE_HT2", TEMP: "TEMP" };
 
 function fmtDate(date) {
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -132,18 +132,6 @@ stations.forEach(s => {
 
 const charts = {};
 
-function valueAtTarget(history, latestTime, days) {
-  if (!history.length || !latestTime) return null;
-  const target = new Date(latestTime).getTime() - (days * 24 * 60 * 60 * 1000);
-  let best = history[0]; 
-  for (const h of history) {
-    const t = new Date(h.time).getTime();
-    if (t <= target) best = h;
-    else break;
-  }
-  return best ? best.value : null;
-}
-
 function formatInches(feet) {
   let inches = Math.round(Math.abs(feet) * 12);
   if (inches === 0) return "0 inches";
@@ -161,49 +149,52 @@ async function loadStation(station) {
     const targetGageParam = station.gageParam || "GAGE_HT";
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
     const histGage = await fetchDWRHistory(sid, targetGageParam).catch(() => []);
+    const histTemp = await fetchDWRHistory(sid, "TEMP").catch(() => []);
 
     const flow = getLatestAndPrev(histFlow);
     const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
     const flow7 = valueAtTarget(histFlow, flow.latestTime, 7);
-    const pct1Flow = percentChange(flow.latestValue, flow1);
-    const pct7Flow = percentChange(flow.latestValue, flow7);
+    const temp = getLatestAndPrev(histTemp);
+    
+    // UI Update Row
+    const row = document.getElementById(`row-${sid}-DISCHRG`);
+    const tempText = (temp.latestValue != null) ? ` | Temp: ${temp.latestValue.toFixed(0)}°F` : "";
+    row.innerHTML = `<span class="label">Current Flow:</span> <span class="value">${flow.latestValue != null ? flow.latestValue.toFixed(0) : "—"} cfs${tempText}</span>`;
 
+    // Flow Story
     const flowGuideDiv = document.getElementById(`flow-guide-${sid}`);
     if (flow.latestValue != null && flow1 != null && flow7 != null) {
-      const absPct1 = Math.round(Math.abs(pct1Flow));
-      const moreLess = pct1Flow >= 0 ? "more" : "less";
-      const absPct7 = Math.round(Math.abs(pct7Flow));
-      const increasedDecreased = pct7Flow >= 0 ? "increased" : "decreased";
-      const themeClass = Math.abs(pct1Flow) > 15 ? "story-red" : (Math.abs(pct1Flow) >= 5 ? "story-yellow" : "story-green");
+      const pct1 = percentChange(flow.latestValue, flow1);
+      const pct7 = percentChange(flow.latestValue, flow7);
+      const themeClass = Math.abs(pct1) > 15 ? "story-red" : (Math.abs(pct1) >= 5 ? "story-yellow" : "story-green");
       flowGuideDiv.className = `flow-guide ${themeClass}`;
       flowGuideDiv.style.display = "block";
-      flowGuideDiv.innerHTML = `<strong>Current Flow: ${Math.round(flow.latestValue)} cfs,</strong> this is <strong>${absPct1}% ${moreLess}</strong> than yesterday and has <strong>${increasedDecreased} ${absPct7}%</strong> since last week.`;
+      flowGuideDiv.innerHTML = `This flow is <strong>${Math.round(Math.abs(pct1))}% ${pct1 >= 0 ? "more" : "less"}</strong> than yesterday and has <strong>${pct7 >= 0 ? "increased" : "decreased"} ${Math.round(Math.abs(pct7))}%</strong> since last week.`;
     }
 
+    // Gauge Story
     const storyGuideDiv = document.getElementById(`story-guide-${sid}`);
     const gage = getLatestAndPrev(histGage);
     const gage1 = valueAtTarget(histGage, gage.latestTime, 1);
     const gage7 = valueAtTarget(histGage, gage.latestTime, 7);
     if (gage.latestValue != null && gage1 != null && gage7 != null) {
       const diffFeet = gage.latestValue - gage1;
-      const formattedInches = formatInches(diffFeet);
-      const higherLower1 = diffFeet >= 0 ? "higher" : "lower";
       const pct1Gage = percentChange(gage.latestValue, gage1);
-      const risenDropped1 = pct1Gage >= 0 ? "risen" : "dropped";
       const pct7Gage = percentChange(gage.latestValue, gage7);
       const themeClass = Math.abs(pct1Gage) > 15 ? "story-red" : (Math.abs(pct1Gage) >= 5 ? "story-yellow" : "story-green");
       storyGuideDiv.className = `story-guide ${themeClass}`;
       storyGuideDiv.style.display = "block";
-      // FIXED: Using formatInches for the current gauge reading too
-      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${formatInches(gage.latestValue)}:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${Math.round(Math.abs(pct1Gage))}%</strong>, which is <strong>${Math.round(Math.abs(pct7Gage))}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
+      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(1)} ft:</strong> The water is <strong>${formatInches(diffFeet)} ${diffFeet >= 0 ? "higher" : "lower"}</strong> than yesterday and has ${pct1Gage >= 0 ? "risen" : "dropped"} <strong>${Math.round(Math.abs(pct1Gage))}%</strong>, which is <strong>${Math.round(Math.abs(pct7Gage))}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
     }
 
+    // Alerts
     const alertDiv = document.getElementById(`alert-${sid}`);
     if (flow.latestValue != null && flow.prevValue != null && percentChange(flow.latestValue, flow.prevValue) >= 10) {
       alertDiv.style.display = "block";
       alertDiv.textContent = `⚠ Rapid rise in flow: ${Math.round(percentChange(flow.latestValue, flow.prevValue))}% increase.`;
     } else { alertDiv.style.display = "none"; }
 
+    // Chart
     const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
     const dailyFlow = [], seenDates = new Set(), gageMap = {};
     for (const h of histGage) if (h.time && h.value !== null) gageMap[new Date(h.time).toLocaleDateString()] = h.value;
