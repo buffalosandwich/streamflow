@@ -28,22 +28,17 @@
   .badge-neg { background: #b22222; }
   .badge-zero { background: #777777; }
   
-  /* FIXED: Set up base story guide styling, plus the 3 color variations */
   .story-guide { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid transparent; }
-  
   .story-green { background: #d4edda; color: #155724; border-color: #c3e6cb; }
   .story-green strong { color: #0b2e13; }
-  
   .story-yellow { background: #fff3cd; color: #856404; border-color: #ffeeba; }
   .story-yellow strong { color: #533f03; }
-  
   .story-red { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
   .story-red strong { color: #4c1118; }
   
-  .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   
-  .chart-wrapper { position: relative; height: 160px; width: 100%; margin-top: 6px; }
+  .chart-wrapper { position: relative; height: 180px; width: 100%; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -67,7 +62,7 @@ const stations = [
   { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
   { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir" },
   { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
-  { id: "CONMOGCO", name: "Conejos River Near Mogote" },
+  { id: "CONMOGCO", name: "Conejos River Near Mogote", gageParam: "GAGE_HT2" },
   { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
   { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
   { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
@@ -84,7 +79,8 @@ const PARAMS = {
 
 const DWR_PARAM_MAP = {
   DISCHRG: "DISCHRG",
-  GAGE_HT: "GAGE_HT"
+  GAGE_HT: "GAGE_HT",
+  GAGE_HT2: "GAGE_HT2"
 };
 
 function fmtDate(date) {
@@ -147,7 +143,6 @@ stations.forEach(s => {
     </div>
     <div class="row" id="row-${s.id}-DISCHRG"></div>
     <div id="story-guide-${s.id}" style="display:none;"></div>
-    <div class="updated" id="updated-${s.id}"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
     <div class="chart-wrapper">
       <canvas id="chart-${s.id}"></canvas>
@@ -181,8 +176,10 @@ function formatBadgeHTML(pct) {
 async function loadStation(station) {
   const sid = station.id;
   try {
+    const targetGageParam = station.gageParam || "GAGE_HT";
+    
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
-    const histGage = await fetchDWRHistory(sid, "GAGE_HT").catch(() => []);
+    const histGage = await fetchDWRHistory(sid, targetGageParam).catch(() => []);
 
     const flow = getLatestAndPrev(histFlow);
     const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
@@ -191,7 +188,7 @@ async function loadStation(station) {
     let rapidAlert = "";
     if (flow.latestValue != null && flow.prevValue != null) {
       const risePct = percentChange(flow.latestValue, flow.prevValue);
-      if (risePct != null && risePct > 5) {
+      if (risePct != null && risePct >= 10) {
         rapidAlert = `⚠ Rapid rise in flow: ${risePct.toFixed(1)}% increase since last reading.`;
       }
     }
@@ -221,21 +218,22 @@ async function loadStation(station) {
     const gage7 = valueAtTarget(histGage, gage.latestTime, 7);
 
     if (gage.latestValue != null && gage1 != null && gage7 != null) {
+      // FIXED: Convert feet difference to inches for the story
       const diffFeet = gage.latestValue - gage1;
-      const absDiffFeet = Math.abs(diffFeet).toFixed(2);
-      const upDown1 = diffFeet >= 0 ? "up" : "down";
+      const diffInches = (diffFeet * 12).toFixed(1);
+      const absDiffInches = Math.abs(diffInches);
+      const higherLower1 = diffFeet >= 0 ? "higher" : "lower";
       
       const pct1Gage = percentChange(gage.latestValue, gage1);
       const absPct1 = Math.abs(pct1Gage).toFixed(1);
-      const dropRise1 = pct1Gage >= 0 ? "risen" : "dropped";
+      const risenDropped1 = pct1Gage >= 0 ? "risen" : "dropped";
 
       const pct7Gage = percentChange(gage.latestValue, gage7);
       const absPct7 = Math.abs(pct7Gage).toFixed(1);
-      const upDown7 = pct7Gage >= 0 ? "up" : "down";
+      const higherLower7 = pct7Gage >= 0 ? "higher" : "lower";
 
-      // FIXED: Assign the correct color class based on the absolute percentage change
       const absPctNum = Math.abs(pct1Gage);
-      let themeClass = "story-green"; // Defaults to green (< 5%)
+      let themeClass = "story-green"; 
       
       if (absPctNum > 15) {
         themeClass = "story-red";
@@ -243,14 +241,10 @@ async function loadStation(station) {
         themeClass = "story-yellow";
       }
 
-      // FIXED: Removed the emoji, added dynamic class
       storyGuideDiv.className = `story-guide ${themeClass}`;
       storyGuideDiv.style.display = "inline-block";
-      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The river is <strong>${upDown1} ${absDiffFeet} feet</strong> since yesterday and has ${dropRise1} <strong>${absPct1}%</strong> in the last day, <strong>${absPct7}% ${upDown7}</strong> from last week.`;
+      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The water is <strong>${absDiffInches} inches ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${absPct1}%</strong>, which is <strong>${absPct7}% ${higherLower7}</strong> than last week.`;
     }
-
-    const updated = document.getElementById(`updated-${sid}`);
-    updated.textContent = flow.latestTime ? `Updated: ${flow.latestTime}` : "";
 
     const alertDiv = document.getElementById(`alert-${sid}`);
     if (rapidAlert) {
@@ -264,6 +258,13 @@ async function loadStation(station) {
     
     const dailyFlow = [];
     const seenDates = new Set();
+    const gageMap = {};
+
+    for (const h of histGage) {
+      if (h.time && h.value !== null) {
+        gageMap[new Date(h.time).toLocaleDateString()] = h.value;
+      }
+    }
     
     for (let i = histFlow.length - 1; i >= 0; i--) {
       if (!histFlow[i].time) continue;
@@ -274,6 +275,7 @@ async function loadStation(station) {
         seenDates.add(dateStr);
         dailyFlow.unshift({
           timeLabel: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`,
+          dateStr: dateStr,
           value: histFlow[i].value
         });
       }
@@ -281,6 +283,7 @@ async function loadStation(station) {
 
     const labels = dailyFlow.map(d => d.timeLabel);
     const flowSeries = dailyFlow.map(d => d.value);
+    const gageSeries = dailyFlow.map(d => gageMap[d.dateStr] ?? null);
 
     const validFlows = flowSeries.filter(val => val !== null);
     const maxFlow = validFlows.length > 0 ? Math.max(...validFlows) : 10;
@@ -293,51 +296,87 @@ async function loadStation(station) {
       data: {
         labels: labels,
         datasets: [
-          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'yFlow', spanGaps: true }
+          { 
+            label: "Flow (cfs)", 
+            data: flowSeries, 
+            borderColor: "rgba(0, 123, 255, 1)", 
+            backgroundColor: "rgba(0, 123, 255, 0.1)", 
+            borderWidth: 2, 
+            pointRadius: 3, 
+            tension: 0.3, 
+            yAxisID: 'yFlow', 
+            spanGaps: true,
+            datalabels: {
+              align: 'bottom', 
+              anchor: 'bottom', 
+              offset: 4,    
+              font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
+              textStrokeColor: 'rgba(255, 255, 255, 0.9)',
+              textStrokeWidth: 3,
+              formatter: function(value, context) {
+                const index = context.dataIndex;
+                if (index === 0) return ''; 
+                
+                const prevValue = context.dataset.data[index - 1];
+                if (!prevValue) return '';
+                
+                const pct = ((value - prevValue) / prevValue) * 100;
+                if (Math.abs(pct) < 0.1) return ''; 
+                
+                const sign = pct > 0 ? '+' : '';
+                return sign + pct.toFixed(1) + '%';
+              },
+              color: function(context) {
+                const index = context.dataIndex;
+                if (index === 0) return '#777'; 
+                
+                const prevValue = context.dataset.data[index - 1];
+                if (!prevValue) return '#777';
+                
+                const pct = ((context.dataset.data[index] - prevValue) / prevValue) * 100;
+                if (pct > 0.1) return '#2e8b57'; 
+                if (pct < -0.1) return '#b22222'; 
+                return '#777'; 
+              }
+            }
+          },
+          { 
+            label: "Gauge (ft)", 
+            data: gageSeries, 
+            borderColor: "rgba(108, 117, 125, 0.8)",
+            backgroundColor: "transparent", 
+            borderDash: [5, 5],
+            borderWidth: 2, 
+            pointRadius: 3, 
+            tension: 0.3, 
+            yAxisID: 'yGage', 
+            spanGaps: true,
+            datalabels: { 
+              display: true,
+              align: 'top', 
+              anchor: 'top', 
+              offset: 4,
+              font: { size: 10, weight: 'bold', family: 'Arial, sans-serif' },
+              color: 'rgba(108, 117, 125, 1)', 
+              textStrokeColor: 'rgba(255, 255, 255, 0.9)',
+              textStrokeWidth: 3,
+              formatter: function(value) {
+                if (value === null || value === undefined) return '';
+                return value.toFixed(2) + ' ft';
+              }
+            }
+          }
         ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-          padding: { top: 25, bottom: 5 } 
+          padding: { top: 25, bottom: 20 } 
         },
         plugins: {
           legend: { display: false }, 
-          tooltip: { mode: "index", intersect: false },
-          datalabels: {
-            align: 'top', 
-            anchor: 'end', 
-            offset: 4,    
-            font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
-            textStrokeColor: 'rgba(255, 255, 255, 0.9)',
-            textStrokeWidth: 3,
-            formatter: function(value, context) {
-              const index = context.dataIndex;
-              if (index === 0) return ''; 
-              
-              const prevValue = context.dataset.data[index - 1];
-              if (!prevValue) return '';
-              
-              const pct = ((value - prevValue) / prevValue) * 100;
-              if (Math.abs(pct) < 0.1) return ''; 
-              
-              const sign = pct > 0 ? '+' : '';
-              return sign + pct.toFixed(1) + '%';
-            },
-            color: function(context) {
-              const index = context.dataIndex;
-              if (index === 0) return '#777'; 
-              
-              const prevValue = context.dataset.data[index - 1];
-              if (!prevValue) return '#777';
-              
-              const pct = ((context.dataset.data[index] - prevValue) / prevValue) * 100;
-              if (pct > 0.1) return '#2e8b57'; 
-              if (pct < -0.1) return '#b22222'; 
-              return '#777'; 
-            }
-          }
+          tooltip: { mode: "index", intersect: false }
         },
         scales: { 
           x: { display: true, ticks: { font: { size: 11, family: 'Arial, sans-serif' } } }, 
@@ -347,7 +386,27 @@ async function loadStation(station) {
             position: 'left',
             beginAtZero: true,
             suggestedMax: dynamicYMax,
-            ticks: { font: { size: 11, family: 'Arial, sans-serif' } }
+            title: {
+              display: true,
+              text: 'cfs',
+              color: 'rgba(0, 123, 255, 1)',
+              font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' }
+            },
+            ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(0, 123, 255, 1)' }
+          },
+          yGage: {
+            type: 'linear', 
+            display: true, 
+            position: 'right',
+            beginAtZero: true,
+            grid: { drawOnChartArea: false },
+            title: {
+              display: true,
+              text: 'feet',
+              color: 'rgba(108, 117, 125, 1)',
+              font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' }
+            },
+            ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(108, 117, 125, 1)' }
           }
         }
       }
