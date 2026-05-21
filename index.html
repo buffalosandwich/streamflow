@@ -38,7 +38,8 @@
   
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   
-  .chart-wrapper { position: relative; height: 160px; width: 100%; margin-top: 6px; }
+  /* Increased height slightly to accommodate the new axis titles */
+  .chart-wrapper { position: relative; height: 180px; width: 100%; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -304,10 +305,9 @@ async function loadStation(station) {
             tension: 0.3, 
             yAxisID: 'yFlow', 
             spanGaps: true,
-            // FIXED: Custom datalabels applied directly to the Flow dataset
             datalabels: {
-              align: 'bottom', // Pushes text down
-              anchor: 'bottom', // Anchors to the bottom of the dot
+              align: 'bottom', 
+              anchor: 'bottom', 
               offset: 4,    
               font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
               textStrokeColor: 'rgba(255, 255, 255, 0.9)',
@@ -350,14 +350,13 @@ async function loadStation(station) {
             tension: 0.3, 
             yAxisID: 'yGage', 
             spanGaps: true,
-            // FIXED: Custom datalabels for the Gauge dataset
             datalabels: { 
               display: true,
-              align: 'top', // Pulls text up
-              anchor: 'top', // Anchors to the top of the dot
+              align: 'top', 
+              anchor: 'top', 
               offset: 4,
               font: { size: 10, weight: 'bold', family: 'Arial, sans-serif' },
-              color: 'rgba(108, 117, 125, 1)', // Matches the gray dashed line
+              color: 'rgba(108, 117, 125, 1)', 
               textStrokeColor: 'rgba(255, 255, 255, 0.9)',
               textStrokeWidth: 3,
               formatter: function(value) {
@@ -372,12 +371,11 @@ async function loadStation(station) {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-          padding: { top: 25, bottom: 20 } // FIXED: Added bottom padding so the percentages don't hit the X-axis
+          padding: { top: 25, bottom: 20 } 
         },
         plugins: {
           legend: { display: false }, 
           tooltip: { mode: "index", intersect: false }
-          // Global datalabels logic removed to prevent conflicts
         },
         scales: { 
           x: { display: true, ticks: { font: { size: 11, family: 'Arial, sans-serif' } } }, 
@@ -387,6 +385,13 @@ async function loadStation(station) {
             position: 'left',
             beginAtZero: true,
             suggestedMax: dynamicYMax,
+            // FIXED: Added Title for the left Axis
+            title: {
+              display: true,
+              text: 'cfs',
+              color: 'rgba(0, 123, 255, 1)',
+              font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' }
+            },
             ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(0, 123, 255, 1)' }
           },
           yGage: {
@@ -395,6 +400,13 @@ async function loadStation(station) {
             position: 'right',
             beginAtZero: true,
             grid: { drawOnChartArea: false },
+            // FIXED: Added Title for the right Axis
+            title: {
+              display: true,
+              text: 'feet',
+              color: 'rgba(108, 117, 125, 1)',
+              font: { size: 12, weight: 'bold', family: 'Arial, sans-serif' }
+            },
             ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(108, 117, 125, 1)' }
           }
         }
