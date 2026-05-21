@@ -18,7 +18,7 @@
   .name { font-size: 1.05em; font-weight: bold; margin-bottom: 4px; }
   .name a { color: #0077cc; text-decoration: none; }
   .name a:hover { text-decoration: underline; }
-  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 4px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 2px; }
   .label { font-weight: bold; }
   .value { font-weight: bold; }
   .trend-up { color: #008000; }
@@ -28,6 +28,10 @@
   .badge-pos { background: #2e8b57; }
   .badge-neg { background: #b22222; }
   .badge-zero { background: #777777; }
+  
+  /* FIXED: Added styling for our new plain-English insights sentence */
+  .insights { font-size: 0.82em; color: #555; margin-bottom: 6px; font-style: italic; }
+  
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   canvas { width: 100% !important; height: 140px !important; margin-top: 6px; }
@@ -145,11 +149,13 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
+  // FIXED: Added an insights div directly beneath the data row
   card.innerHTML = `
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
     </div>
     <div class="row" id="row-${s.id}-DISCHRG"></div>
+    <div class="insights" id="insights-${s.id}"></div>
     <div class="updated" id="updated-${s.id}"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
     <canvas id="chart-${s.id}"></canvas>
@@ -159,11 +165,11 @@ stations.forEach(s => {
 
 const charts = {};
 
-function value24hAgo(history, latestTime) {
+// FIXED: Upgraded function to rewind exactly 'X' days into the past
+function valueAtTarget(history, latestTime, days) {
   if (!history.length || !latestTime) return null;
-  const latestDate = new Date(latestTime);
-  const target = latestDate.getTime() - 24 * 60 * 60 * 1000;
-  let best = null;
+  const target = new Date(latestTime).getTime() - (days * 24 * 60 * 60 * 1000);
+  let best = history[0]; // Safely default to the oldest record available
   for (const h of history) {
     const t = new Date(h.time).getTime();
     if (t <= target) best = h;
@@ -172,14 +178,31 @@ function value24hAgo(history, latestTime) {
   return best ? best.value : null;
 }
 
+// FIXED: Small helper to format positive/negative percents into english
+function compareText(pct, label) {
+  if (pct == null) return `n/a ${label}`;
+  const v = Math.abs(pct).toFixed(1);
+  if (pct > 0.1) return `${v}% higher than ${label}`;
+  if (pct < -0.1) return `${v}% lower than ${label}`;
+  return `unchanged from ${label}`;
+}
+
 async function loadStation(station) {
   const sid = station.id;
   try {
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
 
     const flow = getLatestAndPrev(histFlow);
-    const flow24 = value24hAgo(histFlow, flow.latestTime);
-    const flowPct = percentChange(flow.latestValue, flow24);
+    
+    // Grab the values from 10 days, 5 days, and 1 day ago
+    const flow10 = valueAtTarget(histFlow, flow.latestTime, 10);
+    const flow5 = valueAtTarget(histFlow, flow.latestTime, 5);
+    const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
+
+    // Calculate the percentage shifts
+    const pct10 = percentChange(flow.latestValue, flow10);
+    const pct5 = percentChange(flow.latestValue, flow5);
+    const pct1 = percentChange(flow.latestValue, flow1);
 
     let rapidAlert = "";
     if (flow.latestValue != null && flow.prevValue != null) {
@@ -204,7 +227,17 @@ async function loadStation(station) {
       `;
     }
 
-    updateRow("DISCHRG", flow, flowPct);
+    // Pass the 1-day percentage to the main row so the badge still shows yesterday's change
+    updateRow("DISCHRG", flow, pct1);
+    
+    // Construct and inject the plain-english sentence
+    const txt10 = compareText(pct10, "10 days ago");
+    const txt5 = compareText(pct5, "5 days ago");
+    const txt1 = compareText(pct1, "yesterday");
+    
+    const insightsDiv = document.getElementById(`insights-${sid}`);
+    let sentence = `${txt10}, ${txt5}, and ${txt1}.`;
+    insightsDiv.textContent = sentence.charAt(0).toUpperCase() + sentence.slice(1);
 
     const updated = document.getElementById(`updated-${sid}`);
     updated.textContent = flow.latestTime ? `Updated: ${flow.latestTime}` : "";
