@@ -62,7 +62,8 @@ const stations = [
   { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
   { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir" },
   { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
-  { id: "CONMOGCO", name: "Conejos River Near Mogote" },
+  // FIXED: Added the custom gauge parameter override for this specific river
+  { id: "CONMOGCO", name: "Conejos River Near Mogote", gageParam: "GAGE_HT2" },
   { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
   { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
   { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
@@ -77,9 +78,11 @@ const PARAMS = {
   DISCHRG: { label: "Current Flow", unit: "cfs" }
 };
 
+// FIXED: Added GAGE_HT2 to the valid parameter mapping
 const DWR_PARAM_MAP = {
   DISCHRG: "DISCHRG",
-  GAGE_HT: "GAGE_HT"
+  GAGE_HT: "GAGE_HT",
+  GAGE_HT2: "GAGE_HT2"
 };
 
 function fmtDate(date) {
@@ -136,7 +139,6 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
-  // FIXED: Removed the <div class="updated"> entirely
   card.innerHTML = `
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
@@ -176,8 +178,11 @@ function formatBadgeHTML(pct) {
 async function loadStation(station) {
   const sid = station.id;
   try {
+    // FIXED: Now checks if the station has a custom gageParam, otherwise defaults to standard GAGE_HT
+    const targetGageParam = station.gageParam || "GAGE_HT";
+    
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
-    const histGage = await fetchDWRHistory(sid, "GAGE_HT").catch(() => []);
+    const histGage = await fetchDWRHistory(sid, targetGageParam).catch(() => []);
 
     const flow = getLatestAndPrev(histFlow);
     const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
@@ -186,7 +191,7 @@ async function loadStation(station) {
     let rapidAlert = "";
     if (flow.latestValue != null && flow.prevValue != null) {
       const risePct = percentChange(flow.latestValue, flow.prevValue);
-      if (risePct != null && risePct > 5) {
+      if (risePct != null && risePct >= 10) {
         rapidAlert = `⚠ Rapid rise in flow: ${risePct.toFixed(1)}% increase since last reading.`;
       }
     }
@@ -218,7 +223,6 @@ async function loadStation(station) {
     if (gage.latestValue != null && gage1 != null && gage7 != null) {
       const diffFeet = gage.latestValue - gage1;
       const absDiffFeet = Math.abs(diffFeet).toFixed(2);
-      // FIXED: Adjusted wording logic for higher/lower and risen/dropped
       const higherLower1 = diffFeet >= 0 ? "higher" : "lower";
       
       const pct1Gage = percentChange(gage.latestValue, gage1);
@@ -240,11 +244,8 @@ async function loadStation(station) {
 
       storyGuideDiv.className = `story-guide ${themeClass}`;
       storyGuideDiv.style.display = "inline-block";
-      // FIXED: Updated sentence to exactly match your requested format
       storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The water is <strong>${absDiffFeet} feet ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${absPct1}%</strong>, which is <strong>${absPct7}% ${higherLower7}</strong> than last week.`;
     }
-
-    // FIXED: The JS block that updated the timestamp text has been removed entirely
 
     const alertDiv = document.getElementById(`alert-${sid}`);
     if (rapidAlert) {
