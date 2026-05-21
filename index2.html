@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SLV Streams Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
   body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
   h1 { font-size: 1.4em; margin: 10px 0; }
@@ -28,14 +29,12 @@
   .badge-zero { background: #777777; }
   
   .insights { font-size: 0.85em; color: #444; margin-bottom: 8px; margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px;}
-  
-  /* NEW: Styling for the Wadability Guide */
   .wade-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
   .wade-guide strong { color: #004085; }
   
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
-  canvas { width: 100% !important; height: 140px !important; margin-top: 6px; }
+  canvas { width: 100% !important; height: 160px !important; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -48,6 +47,9 @@
 <div id="streams"></div>
 
 <script>
+// Register the datalabels plugin globally so all charts can use it
+Chart.register(ChartDataLabels);
+
 const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
 
 const stations = [
@@ -130,7 +132,6 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
-  // Added the wade-guide container right below the insights
   card.innerHTML = `
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
@@ -215,10 +216,8 @@ async function loadStation(station) {
     const insightsDiv = document.getElementById(`insights-${sid}`);
     insightsDiv.innerHTML = `${b10} vs 10 days ago, and ${b5} vs 5 days ago.`;
 
-    // NEW: Calculate and display the Wading Guide based on the Rule of 10
     const wadeGuideDiv = document.getElementById(`wade-guide-${sid}`);
     if (flow.latestValue != null && flow.latestValue > 0) {
-      // Calculate Minimum Safe Width (CFS / 10). Rounding up for safety.
       const minSafeWidth = Math.ceil(flow.latestValue / 10);
       wadeGuideDiv.className = "wade-guide";
       wadeGuideDiv.style.display = "inline-block";
@@ -271,9 +270,45 @@ async function loadStation(station) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { top: 20 } // Creates headroom so the text labels don't clip at the top
+        },
         plugins: {
-          legend: { display: true, labels: { boxWidth: 10, font: { size: 9 } } },
-          tooltip: { mode: "index", intersect: false }
+          legend: { display: false }, // Hidden the legend to save space since there is only one line
+          tooltip: { mode: "index", intersect: false },
+          
+          // NEW: Datalabels configuration for placing the % text over the dots
+          datalabels: {
+            align: 'top', // Position text above the dot
+            anchor: 'end', 
+            offset: 4,    // Nudge it up slightly
+            font: { size: 9, weight: 'bold' },
+            formatter: function(value, context) {
+              const index = context.dataIndex;
+              if (index === 0) return ''; // The very first day has no previous day to compare to
+              
+              const prevValue = context.dataset.data[index - 1];
+              if (!prevValue) return '';
+              
+              const pct = ((value - prevValue) / prevValue) * 100;
+              if (Math.abs(pct) < 0.1) return ''; // Don't show anything if it's completely flat
+              
+              const sign = pct > 0 ? '+' : '';
+              return sign + pct.toFixed(1) + '%';
+            },
+            color: function(context) {
+              const index = context.dataIndex;
+              if (index === 0) return '#777'; 
+              
+              const prevValue = context.dataset.data[index - 1];
+              if (!prevValue) return '#777';
+              
+              const pct = ((context.dataset.data[index] - prevValue) / prevValue) * 100;
+              if (pct > 0.1) return '#2e8b57'; // Green text for increase
+              if (pct < -0.1) return '#b22222'; // Red text for decrease
+              return '#777'; 
+            }
+          }
         },
         scales: { 
           x: { display: true, ticks: { font: { size: 10 } } },
