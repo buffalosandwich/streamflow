@@ -28,8 +28,9 @@
   .badge-neg { background: #b22222; }
   .badge-zero { background: #777777; }
   
-  .wade-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
-  .wade-guide strong { color: #004085; }
+  /* Retained the blue box styling but renamed the class to fit the new story format */
+  .story-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
+  .story-guide strong { color: #004085; }
   
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
@@ -72,8 +73,10 @@ const PARAMS = {
   DISCHRG: { label: "Current Flow", unit: "cfs" }
 };
 
+// Brought GAGE_HT back into the mapping so the API knows what to look for
 const DWR_PARAM_MAP = {
-  DISCHRG: "DISCHRG"
+  DISCHRG: "DISCHRG",
+  GAGE_HT: "GAGE_HT"
 };
 
 function fmtDate(date) {
@@ -130,13 +133,13 @@ stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
   card.id = `card-${s.id}`;
-  // Removed the insights div entirely
+  // Updated the ID for the blue box container
   card.innerHTML = `
     <div class="name">
       <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
     </div>
     <div class="row" id="row-${s.id}-DISCHRG"></div>
-    <div id="wade-guide-${s.id}" style="display:none;"></div>
+    <div id="story-guide-${s.id}" style="display:none;"></div>
     <div class="updated" id="updated-${s.id}"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
     <canvas id="chart-${s.id}"></canvas>
@@ -169,7 +172,9 @@ function formatBadgeHTML(pct) {
 async function loadStation(station) {
   const sid = station.id;
   try {
+    // Fetching both Flow and Gauge Height now
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
+    const histGage = await fetchDWRHistory(sid, "GAGE_HT").catch(() => []);
 
     const flow = getLatestAndPrev(histFlow);
     const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
@@ -202,12 +207,31 @@ async function loadStation(station) {
 
     updateRow("DISCHRG", flow, pct1);
     
-    const wadeGuideDiv = document.getElementById(`wade-guide-${sid}`);
-    if (flow.latestValue != null && flow.latestValue > 0) {
-      const minSafeWidth = Math.ceil(flow.latestValue / 10);
-      wadeGuideDiv.className = "wade-guide";
-      wadeGuideDiv.style.display = "inline-block";
-      wadeGuideDiv.innerHTML = `🦺 <strong>Wading Guide:</strong> Unsafe to wade if the channel is narrower than <strong>${minSafeWidth} feet</strong> here.`;
+    // NEW: Story generation logic for Gauge Height
+    const storyGuideDiv = document.getElementById(`story-guide-${sid}`);
+    const gage = getLatestAndPrev(histGage);
+    const gage1 = valueAtTarget(histGage, gage.latestTime, 1);
+    const gage7 = valueAtTarget(histGage, gage.latestTime, 7);
+
+    if (gage.latestValue != null && gage1 != null && gage7 != null) {
+      // Calculate absolute difference in feet
+      const diffFeet = gage.latestValue - gage1;
+      const absDiffFeet = Math.abs(diffFeet).toFixed(2);
+      const upDown1 = diffFeet >= 0 ? "up" : "down";
+      
+      // Calculate % change since yesterday
+      const pct1Gage = percentChange(gage.latestValue, gage1);
+      const absPct1 = Math.abs(pct1Gage).toFixed(1);
+      const dropRise1 = pct1Gage >= 0 ? "risen" : "dropped";
+
+      // Calculate % change since last week (7 days)
+      const pct7Gage = percentChange(gage.latestValue, gage7);
+      const absPct7 = Math.abs(pct7Gage).toFixed(1);
+      const upDown7 = pct7Gage >= 0 ? "up" : "down";
+
+      storyGuideDiv.className = "story-guide";
+      storyGuideDiv.style.display = "inline-block";
+      storyGuideDiv.innerHTML = `📏 The river is <strong>${upDown1} ${absDiffFeet} feet</strong> since yesterday and has ${dropRise1} <strong>${absPct1}%</strong> in the last day, <strong>${absPct7}% ${upDown7}</strong> from last week.`;
     }
 
     const updated = document.getElementById(`updated-${sid}`);
@@ -257,7 +281,7 @@ async function loadStation(station) {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-          padding: { top: 25, bottom: 5 } // Increased top padding to give bigger fonts room to breathe
+          padding: { top: 25, bottom: 5 } 
         },
         plugins: {
           legend: { display: false }, 
@@ -266,7 +290,7 @@ async function loadStation(station) {
             align: 'top', 
             anchor: 'end', 
             offset: 4,    
-            font: { size: 12, weight: 'bold' }, // Increased font size to 12
+            font: { size: 12, weight: 'bold' }, 
             formatter: function(value, context) {
               const index = context.dataIndex;
               if (index === 0) return ''; 
@@ -295,7 +319,7 @@ async function loadStation(station) {
           }
         },
         scales: { 
-          x: { display: true, ticks: { font: { size: 12 } } }, // Increased X-axis font size to 12
+          x: { display: true, ticks: { font: { size: 12 } } }, 
           yFlow: { type: 'linear', display: false, position: 'left' }
         }
       }
@@ -338,3 +362,5 @@ loadAll();
 </script>
 </body>
 </html>
+
+```
