@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SLV Streams Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
+  h1 { font-size: 1.4em; margin: 10px 0; }
+  #controls { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  button { padding: 8px 14px; border-radius: 6px; border: none; background: #0077cc; color: white; font-size: 0.95em; cursor: pointer; }
+  button:active { transform: scale(0.98); }
+  button:disabled { background: #888; cursor: not-allowed; }
+  #status { font-size: 0.85em; color: #555; }
+  #streams { transition: opacity 0.3s ease; }
+  .card { background: white; padding: 12px; margin-bottom: 12px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+  .name { font-size: 1.05em; font-weight: bold; margin-bottom: 4px; }
+  .name a { color: #0077cc; text-decoration: none; }
+  .name a:hover { text-decoration: underline; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 2px; align-items: center; }
+  .label { font-weight: bold; }
+  .value { font-weight: bold; color: #333; display: flex; align-items: center;}
+  
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.85em; margin-left: 4px; margin-right: 4px; color: white; font-weight: normal; }
+  .badge-pos { background: #2e8b57; }
+  .badge-neg { background: #b22222; }
+  .badge-zero { background: #777777; }
+  
+  .insights { font-size: 0.85em; color: #444; margin-bottom: 8px; margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px;}
+  
+  /* NEW: Styling for the Wadability Guide */
+  .wade-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
+  .wade-guide strong { color: #004085; }
+  
+  .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
+  .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
+  canvas { width: 100% !important; height: 140px !important; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<h1>SLV Streams Dashboard</h1>
+<div id="controls">
+  <button id="refresh-btn" onclick="loadAll()">Refresh Now</button>
+  <div id="status">Loading dashboard for the first time...</div>
+</div>
+<div id="streams"></div>
+
+<script>
+const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
+
+const stations = [
+  { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
+  { id: "ARKSALCO", name: "Arkansas River at Salida, CO" },
+  { id: "ALABELCO", name: "Alamosa River Below Terrace Reservoir" },
+  { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
+  { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir" },
+  { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
+  { id: "CONMOGCO", name: "Conejos River Near Mogote" },
+  { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
+  { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
+  { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
+  { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" },
+  { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" },
+  { id: "LOSORTCO", name: "Los Pinos River Near Ortiz" }
+];
+
+stations.sort((a, b) => a.name.localeCompare(b.name));
+
+const PARAMS = {
+  DISCHRG: { label: "Current Flow", unit: "cfs" }
+};
+
+const DWR_PARAM_MAP = {
+  DISCHRG: "DISCHRG"
+};
+
+function fmtDate(date) {
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${m}/${d}/${date.getFullYear()}`;
+}
+
+function percentChange(current, past) {
+  if (current == null || past == null || past === 0) return null;
+  return ((current - past) / past) * 100;
+}
+
+async function fetchDWRHistory(stationId, paramKey) {
+  const dwrParam = DWR_PARAM_MAP[paramKey] || paramKey;
+  if (!dwrParam) return [];
+  
+  const now = new Date();
+  const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(tomorrow)}&apiKey=${encodeURIComponent(apiKey)}`;
+  
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const json = await res.json();
+    const list = json.ResultList || [];
+    return list.map(d => ({
+      time: d.measDate || d.measDateTime, 
+      value: d.measValue != null ? Number(d.measValue) : null
+    }));
+  } catch(e) {
+    return [];
+  }
+}
+
+function getLatestAndPrev(history) {
+  if (!history || !history.length) {
+    return { latestValue: null, latestTime: null, prevValue: null, prevTime: null };
+  }
+  const latest = history[history.length - 1];
+  const prev = history.length > 1 ? history[history.length - 2] : null;
+  return {
+    latestValue: latest.value,
+    latestTime: latest.time,
+    prevValue: prev ? prev.value : null,
+    prevTime: prev ? prev.time : null
+  };
+}
+
+const container = document.getElementById("streams");
+stations.forEach(s => {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.id = `card-${s.id}`;
+  // Added the wade-guide container right below the insights
+  card.innerHTML = `
+    <div class="name">
+      <a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a>
+    </div>
+    <div class="row" id="row-${s.id}-DISCHRG"></div>
+    <div class="insights" id="insights-${s.id}"></div>
+    <div id="wade-guide-${s.id}" style="display:none;"></div>
+    <div class="updated" id="updated-${s.id}"></div>
+    <div class="alert" id="alert-${s.id}" style="display:none;"></div>
+    <canvas id="chart-${s.id}"></canvas>
+  `;
+  container.appendChild(card);
+});
+
+const charts = {};
+
+function valueAtTarget(history, latestTime, days) {
+  if (!history.length || !latestTime) return null;
+  const target = new Date(latestTime).getTime() - (days * 24 * 60 * 60 * 1000);
+  let best = history[0]; 
+  for (const h of history) {
+    const t = new Date(h.time).getTime();
+    if (t <= target) best = h;
+    else break;
+  }
+  return best ? best.value : null;
+}
+
+function formatBadgeHTML(pct) {
+  if (pct == null) return `<span class="badge badge-zero">n/a</span>`;
+  const v = Math.abs(pct).toFixed(1);
+  const sign = pct > 0.1 ? "+" : (pct < -0.1 ? "-" : "");
+  const cls = pct > 0.1 ? "badge-pos" : (pct < -0.1 ? "badge-neg" : "badge-zero");
+  return `<span class="badge ${cls}">${sign}${v}%</span>`;
+}
+
+async function loadStation(station) {
+  const sid = station.id;
+  try {
+    const histFlow = await fetchDWRHistory(sid, "DISCHRG");
+
+    const flow = getLatestAndPrev(histFlow);
+    
+    const flow10 = valueAtTarget(histFlow, flow.latestTime, 10);
+    const flow5 = valueAtTarget(histFlow, flow.latestTime, 5);
+    const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
+
+    const pct10 = percentChange(flow.latestValue, flow10);
+    const pct5 = percentChange(flow.latestValue, flow5);
+    const pct1 = percentChange(flow.latestValue, flow1);
+
+    let rapidAlert = "";
+    if (flow.latestValue != null && flow.prevValue != null) {
+      const risePct = percentChange(flow.latestValue, flow.prevValue);
+      if (risePct != null && risePct > 5) {
+        rapidAlert = `⚠ Rapid rise in flow: ${risePct.toFixed(1)}% increase since last reading.`;
+      }
+    }
+
+    function updateRow(paramKey, data, pctOneDay) {
+      const row = document.getElementById(`row-${sid}-${paramKey}`);
+      const meta = PARAMS[paramKey];
+      const valText = data.latestValue != null ? data.latestValue.toFixed(2) : "—";
+      
+      let friendlyText = "";
+      if (pctOneDay != null) {
+        const badge = formatBadgeHTML(pctOneDay);
+        friendlyText = `→ ${badge} from yesterday`;
+      }
+      
+      row.innerHTML = `
+        <span class="label">${meta.label}:</span>
+        <span class="value">${valText} ${meta.unit} <span style="font-weight: normal; color: #555; font-size: 0.95em; margin-left: 4px;">${friendlyText}</span></span>
+      `;
+    }
+
+    updateRow("DISCHRG", flow, pct1);
+    
+    const b10 = formatBadgeHTML(pct10);
+    const b5 = formatBadgeHTML(pct5);
+    
+    const insightsDiv = document.getElementById(`insights-${sid}`);
+    insightsDiv.innerHTML = `${b10} vs 10 days ago, and ${b5} vs 5 days ago.`;
+
+    // NEW: Calculate and display the Wading Guide based on the Rule of 10
+    const wadeGuideDiv = document.getElementById(`wade-guide-${sid}`);
+    if (flow.latestValue != null && flow.latestValue > 0) {
+      // Calculate Minimum Safe Width (CFS / 10). Rounding up for safety.
+      const minSafeWidth = Math.ceil(flow.latestValue / 10);
+      wadeGuideDiv.className = "wade-guide";
+      wadeGuideDiv.style.display = "inline-block";
+      wadeGuideDiv.innerHTML = `🦺 <strong>Wading Guide:</strong> Unsafe to wade if the channel is narrower than <strong>${minSafeWidth} feet</strong> here.`;
+    }
+
+    const updated = document.getElementById(`updated-${sid}`);
+    updated.textContent = flow.latestTime ? `Updated: ${flow.latestTime}` : "";
+
+    const alertDiv = document.getElementById(`alert-${sid}`);
+    if (rapidAlert) {
+      alertDiv.style.display = "block";
+      alertDiv.textContent = rapidAlert;
+    } else {
+      alertDiv.style.display = "none";
+    }
+
+    const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
+    
+    const dailyFlow = [];
+    const seenDates = new Set();
+    
+    for (let i = histFlow.length - 1; i >= 0; i--) {
+      if (!histFlow[i].time) continue;
+      const dateObj = new Date(histFlow[i].time);
+      const dateStr = dateObj.toLocaleDateString();
+      
+      if (!seenDates.has(dateStr)) {
+        seenDates.add(dateStr);
+        dailyFlow.unshift({
+          timeLabel: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`,
+          value: histFlow[i].value
+        });
+      }
+    }
+
+    const labels = dailyFlow.map(d => d.timeLabel);
+    const flowSeries = dailyFlow.map(d => d.value);
+
+    if (charts[sid]) charts[sid].destroy();
+    
+    charts[sid] = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'yFlow', spanGaps: true }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, labels: { boxWidth: 10, font: { size: 9 } } },
+          tooltip: { mode: "index", intersect: false }
+        },
+        scales: { 
+          x: { display: true, ticks: { font: { size: 10 } } },
+          yFlow: { type: 'linear', display: false, position: 'left' }
+        }
+      }
+    });
+  } catch (e) {
+    const card = document.getElementById(`card-${sid}`);
+    const errDiv = document.createElement("div");
+    errDiv.style.color = "#b00000";
+    errDiv.style.fontSize = "0.85em";
+    errDiv.textContent = "Error loading data.";
+    card.appendChild(errDiv);
+    console.error("Error loading station", sid, e);
+  }
+}
+
+async function loadAll() {
+  const status = document.getElementById("status");
+  const btn = document.getElementById("refresh-btn");
+  const container = document.getElementById("streams");
+
+  btn.disabled = true;
+  btn.textContent = "Fetching...";
+  container.style.opacity = "0.5";
+  status.textContent = "Contacting DWR servers...";
+
+  for (const s of stations) {
+    await loadStation(s);
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Refresh Now";
+  container.style.opacity = "1";
+  
+  const now = new Date();
+  const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  status.textContent = `Last refreshed at ${timeString}`;
+}
+
+loadAll();
+</script>
+</body>
+</html>
