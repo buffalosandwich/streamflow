@@ -62,7 +62,6 @@ const stations = [
   { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
   { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir" },
   { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
-  // FIXED: Added the custom gauge parameter override for this specific river
   { id: "CONMOGCO", name: "Conejos River Near Mogote", gageParam: "GAGE_HT2" },
   { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
   { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
@@ -78,7 +77,6 @@ const PARAMS = {
   DISCHRG: { label: "Current Flow", unit: "cfs" }
 };
 
-// FIXED: Added GAGE_HT2 to the valid parameter mapping
 const DWR_PARAM_MAP = {
   DISCHRG: "DISCHRG",
   GAGE_HT: "GAGE_HT",
@@ -178,7 +176,6 @@ function formatBadgeHTML(pct) {
 async function loadStation(station) {
   const sid = station.id;
   try {
-    // FIXED: Now checks if the station has a custom gageParam, otherwise defaults to standard GAGE_HT
     const targetGageParam = station.gageParam || "GAGE_HT";
     
     const histFlow = await fetchDWRHistory(sid, "DISCHRG");
@@ -259,7 +256,16 @@ async function loadStation(station) {
     
     const dailyFlow = [];
     const seenDates = new Set();
+    const gageMap = {};
+
+    // Build a quick lookup dictionary for the gauge readings by date
+    for (const h of histGage) {
+      if (h.time && h.value !== null) {
+        gageMap[new Date(h.time).toLocaleDateString()] = h.value;
+      }
+    }
     
+    // Sync the Flow and Gauge arrays to share the exact same dates on the X-axis
     for (let i = histFlow.length - 1; i >= 0; i--) {
       if (!histFlow[i].time) continue;
       const dateObj = new Date(histFlow[i].time);
@@ -269,6 +275,7 @@ async function loadStation(station) {
         seenDates.add(dateStr);
         dailyFlow.unshift({
           timeLabel: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`,
+          dateStr: dateStr,
           value: histFlow[i].value
         });
       }
@@ -276,6 +283,8 @@ async function loadStation(station) {
 
     const labels = dailyFlow.map(d => d.timeLabel);
     const flowSeries = dailyFlow.map(d => d.value);
+    // Map the gauge values to the synchronized flow dates
+    const gageSeries = dailyFlow.map(d => gageMap[d.dateStr] ?? null);
 
     const validFlows = flowSeries.filter(val => val !== null);
     const maxFlow = validFlows.length > 0 ? Math.max(...validFlows) : 10;
@@ -288,7 +297,32 @@ async function loadStation(station) {
       data: {
         labels: labels,
         datasets: [
-          { label: "Flow (cfs)", data: flowSeries, borderColor: "rgba(0, 123, 255, 1)", backgroundColor: "rgba(0, 123, 255, 0.1)", borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'yFlow', spanGaps: true }
+          { 
+            label: "Flow (cfs)", 
+            data: flowSeries, 
+            borderColor: "rgba(0, 123, 255, 1)", 
+            backgroundColor: "rgba(0, 123, 255, 0.1)", 
+            borderWidth: 2, 
+            pointRadius: 3, 
+            tension: 0.3, 
+            yAxisID: 'yFlow', 
+            spanGaps: true 
+          },
+          // NEW: Second dataset for the Gauge Height
+          { 
+            label: "Gauge (ft)", 
+            data: gageSeries, 
+            borderColor: "rgba(108, 117, 125, 0.8)", // Slate gray
+            backgroundColor: "transparent", 
+            borderDash: [5, 5], // Renders as a dashed line to visually separate it
+            borderWidth: 2, 
+            pointRadius: 3, 
+            tension: 0.3, 
+            yAxisID: 'yGage', 
+            spanGaps: true,
+            // Explicitly tell the datalabels plugin NOT to draw text over this line
+            datalabels: { display: false }
+          }
         ]
       },
       options: {
@@ -342,7 +376,16 @@ async function loadStation(station) {
             position: 'left',
             beginAtZero: true,
             suggestedMax: dynamicYMax,
-            ticks: { font: { size: 11, family: 'Arial, sans-serif' } }
+            ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(0, 123, 255, 1)' }
+          },
+          // NEW: Configuration for the right-side Y-Axis for the Gauge
+          yGage: {
+            type: 'linear', 
+            display: true, 
+            position: 'right',
+            beginAtZero: true,
+            grid: { drawOnChartArea: false }, // Hides the background grid lines so they don't clash with the left axis
+            ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(108, 117, 125, 1)' }
           }
         }
       }
