@@ -20,18 +20,13 @@
   .name a:hover { text-decoration: underline; }
   .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 2px; }
   .label { font-weight: bold; }
-  .value { font-weight: bold; }
-  .trend-up { color: #008000; }
-  .trend-down { color: #cc0000; }
-  .trend-flat { color: #555555; }
+  .value { font-weight: bold; color: #333; }
   
-  /* Badge styling remains the same, we are just moving where they render */
   .badge { display: inline-block; padding: 2px 6px; border-radius: 10px; font-size: 0.8em; margin-left: 2px; margin-right: 2px; color: white; }
   .badge-pos { background: #2e8b57; }
   .badge-neg { background: #b22222; }
   .badge-zero { background: #777777; }
   
-  /* Adjusted insights styling slightly so the badges fit nicely inline */
   .insights { font-size: 0.85em; color: #444; margin-bottom: 8px; margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px;}
   
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
@@ -70,7 +65,7 @@ const stations = [
 stations.sort((a, b) => a.name.localeCompare(b.name));
 
 const PARAMS = {
-  DISCHRG: { label: "Flow", unit: "cfs" }
+  DISCHRG: { label: "Current Flow", unit: "cfs" }
 };
 
 const DWR_PARAM_MAP = {
@@ -86,13 +81,6 @@ function fmtDate(date) {
 function percentChange(current, past) {
   if (current == null || past == null || past === 0) return null;
   return ((current - past) / past) * 100;
-}
-
-function trendInfo(current, prev) {
-  if (current == null || prev == null) return { arrow: "→", cls: "trend-flat" };
-  if (current > prev * 1.01) return { arrow: "↑", cls: "trend-up" };
-  if (current < prev * 0.99) return { arrow: "↓", cls: "trend-down" };
-  return { arrow: "→", cls: "trend-flat" };
 }
 
 async function fetchDWRHistory(stationId, paramKey) {
@@ -165,7 +153,6 @@ function valueAtTarget(history, latestTime, days) {
   return best ? best.value : null;
 }
 
-// FIXED: Now returns an actual HTML badge element instead of plain text
 function formatBadgeHTML(pct) {
   if (pct == null) return `<span class="badge badge-zero">n/a</span>`;
   const v = Math.abs(pct).toFixed(1);
@@ -197,29 +184,37 @@ async function loadStation(station) {
       }
     }
 
-    // FIXED: Removed the single badge block from the main row
-    function updateRow(paramKey, data) {
+    // FIXED: Passed the 1-day percentage in to create the friendly text sentence
+    function updateRow(paramKey, data, pctOneDay) {
       const row = document.getElementById(`row-${sid}-${paramKey}`);
       const meta = PARAMS[paramKey];
-      const trend = trendInfo(data.latestValue, data.prevValue);
       const valText = data.latestValue != null ? data.latestValue.toFixed(2) : "—";
+      
+      let friendlyText = "";
+      if (pctOneDay != null) {
+        if (Math.abs(pctOneDay) < 0.1) {
+          friendlyText = `→ unchanged from yesterday`;
+        } else {
+          const dir = pctOneDay > 0 ? "up" : "down";
+          const sign = pctOneDay > 0 ? "+" : "";
+          friendlyText = `→ ${dir} ${sign}${pctOneDay.toFixed(1)}% from yesterday`;
+        }
+      }
       
       row.innerHTML = `
         <span class="label">${meta.label}:</span>
-        <span class="value ${trend.cls}">${valText} ${meta.unit} ${trend.arrow}</span>
+        <span class="value">${valText} ${meta.unit} <span style="font-weight: normal; color: #555; font-size: 0.95em;">${friendlyText}</span></span>
       `;
     }
 
-    updateRow("DISCHRG", flow);
+    updateRow("DISCHRG", flow, pct1);
     
-    // FIXED: Generate the inline HTML badges and string them together
     const b10 = formatBadgeHTML(pct10);
     const b5 = formatBadgeHTML(pct5);
-    const b1 = formatBadgeHTML(pct1);
     
     const insightsDiv = document.getElementById(`insights-${sid}`);
-    // Using innerHTML so the browser renders the spans as actual visual badges
-    insightsDiv.innerHTML = `${b10} vs 10 days ago, ${b5} vs 5 days ago, and ${b1} vs yesterday.`;
+    // FIXED: Removed the 1-day badge from the secondary insights line
+    insightsDiv.innerHTML = `${b10} vs 10 days ago, and ${b5} vs 5 days ago.`;
 
     const updated = document.getElementById(`updated-${sid}`);
     updated.textContent = flow.latestTime ? `Updated: ${flow.latestTime}` : "";
