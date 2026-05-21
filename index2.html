@@ -31,6 +31,9 @@
   .story-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
   .story-guide strong { color: #004085; }
   
+  .wade-guide { font-size: 0.85em; background: #e8f4fd; color: #005a9e; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid #cce5ff;}
+  .wade-guide strong { color: #004085; }
+  
   .updated { font-size: 0.8em; color: #666; margin-top: 4px; }
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   canvas { width: 100% !important; height: 160px !important; margin-top: 6px; }
@@ -137,6 +140,7 @@ stations.forEach(s => {
     </div>
     <div class="row" id="row-${s.id}-DISCHRG"></div>
     <div id="story-guide-${s.id}" style="display:none;"></div>
+    <div id="wade-guide-${s.id}" style="display:none;"></div>
     <div class="updated" id="updated-${s.id}"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
     <canvas id="chart-${s.id}"></canvas>
@@ -223,8 +227,15 @@ async function loadStation(station) {
 
       storyGuideDiv.className = "story-guide";
       storyGuideDiv.style.display = "inline-block";
-      // FIXED: Added the explicit Current Gauge Height to the front of the story
       storyGuideDiv.innerHTML = `📏 <strong>Current Gauge Height: ${gage.latestValue.toFixed(2)} ft:</strong> The river is <strong>${upDown1} ${absDiffFeet} feet</strong> since yesterday and has ${dropRise1} <strong>${absPct1}%</strong> in the last day, <strong>${absPct7}% ${upDown7}</strong> from last week.`;
+    }
+
+    const wadeGuideDiv = document.getElementById(`wade-guide-${sid}`);
+    if (flow.latestValue != null && flow.latestValue > 0) {
+      const minSafeWidth = Math.ceil(flow.latestValue / 10);
+      wadeGuideDiv.className = "wade-guide";
+      wadeGuideDiv.style.display = "inline-block";
+      wadeGuideDiv.innerHTML = `🦺 <strong>Wading Guide:</strong> Unsafe to wade if the channel is narrower than <strong>${minSafeWidth} feet</strong> here.`;
     }
 
     const updated = document.getElementById(`updated-${sid}`);
@@ -259,6 +270,11 @@ async function loadStation(station) {
 
     const labels = dailyFlow.map(d => d.timeLabel);
     const flowSeries = dailyFlow.map(d => d.value);
+
+    // FIXED: Calculate the top 10% ceiling for the Y-Axis
+    const validFlows = flowSeries.filter(val => val !== null);
+    const maxFlow = validFlows.length > 0 ? Math.max(...validFlows) : 10;
+    const dynamicYMax = maxFlow + (maxFlow * 0.10);
 
     if (charts[sid]) charts[sid].destroy();
     
@@ -313,7 +329,15 @@ async function loadStation(station) {
         },
         scales: { 
           x: { display: true, ticks: { font: { size: 12 } } }, 
-          yFlow: { type: 'linear', display: false, position: 'left' }
+          // FIXED: Enabled the left Y-Axis, set it to start at 0, and applied our 10% headroom calculation
+          yFlow: { 
+            type: 'linear', 
+            display: true, 
+            position: 'left',
+            beginAtZero: true,
+            suggestedMax: dynamicYMax,
+            ticks: { font: { size: 11 } }
+          }
         }
       }
     });
