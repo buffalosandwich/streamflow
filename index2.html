@@ -20,7 +20,6 @@
   .name a { color: #0077cc; text-decoration: none; }
   .name a:hover { text-decoration: underline; }
   .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 6px; align-items: center; }
-  
   .flow-guide, .story-guide { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid transparent; }
   .story-green { background: #d4edda; color: #155724; border-color: #c3e6cb; }
   .story-green strong { color: #0b2e13; }
@@ -28,12 +27,9 @@
   .story-yellow strong { color: #533f03; }
   .story-red { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
   .story-red strong { color: #4c1118; }
-  
   .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
   .chart-wrapper { position: relative; height: 180px; width: 100%; margin-top: 6px; }
-  
   #legend { margin-top: 20px; padding: 15px; background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-  #legend h2 { font-size: 1.1em; margin-top: 0; }
   .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9em; }
   .box { width: 20px; height: 20px; border-radius: 4px; margin-right: 10px; }
 </style>
@@ -43,7 +39,7 @@
 <h1>SLV Streams Dashboard</h1>
 <div id="controls">
   <button id="refresh-btn" onclick="loadAll()">Refresh Now</button>
-  <div id="status">Loading dashboard for the first time...</div>
+  <div id="status">Loading dashboard...</div>
 </div>
 <div id="streams"></div>
 
@@ -58,7 +54,6 @@
 Chart.register(ChartDataLabels);
 
 const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
-
 const stations = [
   { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
   { id: "ARKSALCO", name: "Arkansas River at Salida, CO" },
@@ -75,53 +70,24 @@ const stations = [
   { id: "LOSORTCO", name: "Los Pinos River Near Ortiz" }
 ];
 
-stations.sort((a, b) => a.name.localeCompare(b.name));
-
-const PARAMS = { DISCHRG: { label: "Current Flow" } };
-const DWR_PARAM_MAP = { DISCHRG: "DISCHRG", GAGE_HT: "GAGE_HT", GAGE_HT2: "GAGE_HT2", TEMP: "TEMP" };
-
-function fmtDate(date) {
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${m}/${d}/${date.getFullYear()}`;
-}
-
-function percentChange(current, past) {
-  if (current == null || past == null || past === 0) return null;
-  return ((current - past) / past) * 100;
-}
-
-async function fetchDWRHistory(stationId, paramKey) {
-  const dwrParam = DWR_PARAM_MAP[paramKey] || paramKey;
-  if (!dwrParam) return [];
-  const now = new Date();
-  const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(tomorrow)}&apiKey=${encodeURIComponent(apiKey)}`;
+function fmtDate(d) { return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`; }
+async function fetchDWR(sid, param) {
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${sid}&parameter=${param}&startDate=${fmtDate(new Date(Date.now()-864000000))}&endDate=${fmtDate(new Date(Date.now()+86400000))}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
-    const json = await res.json();
-    const list = json.ResultList || [];
-    return list.map(d => ({ time: d.measDate || d.measDateTime, value: d.measValue != null ? Number(d.measValue) : null }));
+    const j = await res.json();
+    return (j.ResultList || []).map(d => ({ time: d.measDate || d.measDateTime, value: d.measValue != null ? Number(d.measValue) : null }));
   } catch(e) { return []; }
-}
-
-function getLatestAndPrev(history) {
-  if (!history || !history.length) return { latestValue: null, latestTime: null, prevValue: null, prevTime: null };
-  const latest = history[history.length - 1];
-  const prev = history.length > 1 ? history[history.length - 2] : null;
-  return { latestValue: latest.value, latestTime: latest.time, prevValue: prev ? prev.value : null, prevTime: prev ? prev.time : null };
 }
 
 const container = document.getElementById("streams");
 stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
-  card.id = `card-${s.id}`;
   card.innerHTML = `
-    <div class="name"><a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a></div>
-    <div class="row" id="row-${s.id}-DISCHRG"></div>
+    <div class="name"><a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank">${s.name}</a></div>
+    <div class="row" id="row-${s.id}"></div>
     <div id="flow-guide-${s.id}" style="display:none;"></div>
     <div id="story-guide-${s.id}" style="display:none;"></div>
     <div class="alert" id="alert-${s.id}" style="display:none;"></div>
@@ -130,108 +96,61 @@ stations.forEach(s => {
   container.appendChild(card);
 });
 
-const charts = {};
+async function loadStation(s) {
+  const [hFlow, hGage, hTemp] = await Promise.all([fetchDWR(s.id, "DISCHRG"), fetchDWR(s.id, s.gageParam || "GAGE_HT"), fetchDWR(s.id, "TEMP")]);
+  
+  const latestFlow = hFlow.length ? hFlow[hFlow.length-1].value : null;
+  const prevFlow = hFlow.length > 1 ? hFlow[hFlow.length-2].value : null;
+  const flow7 = hFlow.length > 24*7 ? hFlow[hFlow.length - (24*7)].value : null;
+  const temp = hTemp.length ? hTemp[hTemp.length-1].value : null;
 
-function formatInches(feet) {
-  let inches = Math.round(Math.abs(feet) * 12);
-  if (inches === 0) return "0 inches";
-  let f = Math.floor(inches / 12);
-  let i = inches % 12;
-  let parts = [];
-  if (f > 0) parts.push(f + (f === 1 ? " foot" : " feet"));
-  if (i > 0) parts.push(i + (i === 1 ? " inch" : " inches"));
-  return parts.join(" ");
-}
+  const row = document.getElementById(`row-${s.id}`);
+  row.innerHTML = `<span class="label">Flow:</span> <span class="value">${latestFlow?.toFixed(0) || '—'} cfs ${temp ? '| Temp: ' + temp.toFixed(0) + '°F' : ''}</span>`;
 
-async function loadStation(station) {
-  const sid = station.id;
-  try {
-    const targetGageParam = station.gageParam || "GAGE_HT";
-    const histFlow = await fetchDWRHistory(sid, "DISCHRG");
-    const histGage = await fetchDWRHistory(sid, targetGageParam).catch(() => []);
-    const histTemp = await fetchDWRHistory(sid, "TEMP").catch(() => []);
+  const flowPct = percentChange(latestFlow, prevFlow);
+  if (latestFlow && prevFlow && flow7) {
+    const div = document.getElementById(`flow-guide-${s.id}`);
+    const theme = Math.abs(flowPct) > 15 ? "story-red" : (Math.abs(flowPct) >= 5 ? "story-yellow" : "story-green");
+    div.className = `flow-guide ${theme}`;
+    div.style.display = "block";
+    div.innerHTML = `Flow is <strong>${Math.round(Math.abs(flowPct))}% ${flowPct >= 0 ? "more" : "less"}</strong> than yesterday and has <strong>${flowPct >= 0 ? "increased" : "decreased"} ${Math.round(Math.abs(percentChange(latestFlow, flow7)))}%</strong> since last week.`;
+  }
 
-    const flow = getLatestAndPrev(histFlow);
-    const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
-    const flow7 = valueAtTarget(histFlow, flow.latestTime, 7);
-    const temp = getLatestAndPrev(histTemp);
-    
-    // UI Update Row
-    const row = document.getElementById(`row-${sid}-DISCHRG`);
-    const tempText = (temp.latestValue != null) ? ` | Temp: ${temp.latestValue.toFixed(0)}°F` : "";
-    row.innerHTML = `<span class="label">Current Flow:</span> <span class="value">${flow.latestValue != null ? flow.latestValue.toFixed(0) : "—"} cfs${tempText}</span>`;
+  const gage = hGage.length ? hGage[hGage.length-1].value : null;
+  const gage1 = hGage.length > 24 ? hGage[hGage.length-25].value : null;
+  if (gage && gage1) {
+    const diff = gage - gage1;
+    const theme = Math.abs(percentChange(gage, gage1)) > 15 ? "story-red" : (Math.abs(percentChange(gage, gage1)) >= 5 ? "story-yellow" : "story-green");
+    const div = document.getElementById(`story-guide-${s.id}`);
+    div.className = `story-guide ${theme}`;
+    div.style.display = "block";
+    div.innerHTML = `<strong>Gauge Height: ${gage.toFixed(1)} ft:</strong> The water is <strong>${Math.round(Math.abs(diff)*12)} inches ${diff >= 0 ? "higher" : "lower"}</strong> than yesterday.`;
+  }
 
-    // Flow Story
-    const flowGuideDiv = document.getElementById(`flow-guide-${sid}`);
-    if (flow.latestValue != null && flow1 != null && flow7 != null) {
-      const pct1 = percentChange(flow.latestValue, flow1);
-      const pct7 = percentChange(flow.latestValue, flow7);
-      const themeClass = Math.abs(pct1) > 15 ? "story-red" : (Math.abs(pct1) >= 5 ? "story-yellow" : "story-green");
-      flowGuideDiv.className = `flow-guide ${themeClass}`;
-      flowGuideDiv.style.display = "block";
-      flowGuideDiv.innerHTML = `This flow is <strong>${Math.round(Math.abs(pct1))}% ${pct1 >= 0 ? "more" : "less"}</strong> than yesterday and has <strong>${pct7 >= 0 ? "increased" : "decreased"} ${Math.round(Math.abs(pct7))}%</strong> since last week.`;
-    }
+  const ctx = document.getElementById(`chart-${s.id}`).getContext("2d");
+  const data = hFlow.slice(-24);
+  const labels = data.map(d => new Date(d.time).getHours() + ":00");
+  const gageData = hGage.slice(-24);
 
-    // Gauge Story
-    const storyGuideDiv = document.getElementById(`story-guide-${sid}`);
-    const gage = getLatestAndPrev(histGage);
-    const gage1 = valueAtTarget(histGage, gage.latestTime, 1);
-    const gage7 = valueAtTarget(histGage, gage.latestTime, 7);
-    if (gage.latestValue != null && gage1 != null && gage7 != null) {
-      const diffFeet = gage.latestValue - gage1;
-      const pct1Gage = percentChange(gage.latestValue, gage1);
-      const pct7Gage = percentChange(gage.latestValue, gage7);
-      const themeClass = Math.abs(pct1Gage) > 15 ? "story-red" : (Math.abs(pct1Gage) >= 5 ? "story-yellow" : "story-green");
-      storyGuideDiv.className = `story-guide ${themeClass}`;
-      storyGuideDiv.style.display = "block";
-      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${gage.latestValue.toFixed(1)} ft:</strong> The water is <strong>${formatInches(diffFeet)} ${diffFeet >= 0 ? "higher" : "lower"}</strong> than yesterday and has ${pct1Gage >= 0 ? "risen" : "dropped"} <strong>${Math.round(Math.abs(pct1Gage))}%</strong>, which is <strong>${Math.round(Math.abs(pct7Gage))}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
-    }
-
-    // Alerts
-    const alertDiv = document.getElementById(`alert-${sid}`);
-    if (flow.latestValue != null && flow.prevValue != null && percentChange(flow.latestValue, flow.prevValue) >= 10) {
-      alertDiv.style.display = "block";
-      alertDiv.textContent = `⚠ Rapid rise in flow: ${Math.round(percentChange(flow.latestValue, flow.prevValue))}% increase.`;
-    } else { alertDiv.style.display = "none"; }
-
-    // Chart
-    const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
-    const dailyFlow = [], seenDates = new Set(), gageMap = {};
-    for (const h of histGage) if (h.time && h.value !== null) gageMap[new Date(h.time).toLocaleDateString()] = h.value;
-    for (let i = histFlow.length - 1; i >= 0; i--) {
-      if (!histFlow[i].time) continue;
-      const dateStr = new Date(histFlow[i].time).toLocaleDateString();
-      if (!seenDates.has(dateStr)) {
-        seenDates.add(dateStr);
-        dailyFlow.unshift({ dateStr: dateStr, value: histFlow[i].value });
-      }
-    }
-    const flowSeries = dailyFlow.map(d => d.value);
-    const gageSeries = dailyFlow.map(d => gageMap[d.dateStr] ?? null);
-
-    if (charts[sid]) charts[sid].destroy();
-    charts[sid] = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: dailyFlow.map(d => `${new Date(d.dateStr).getMonth() + 1}/${new Date(d.dateStr).getDate()}`),
-        datasets: [
-          { label: "Flow", data: flowSeries, borderColor: "#0077cc", borderWidth: 2, tension: 0.3, yAxisID: 'yFlow', datalabels: { align: 'bottom', anchor: 'bottom', font: { size: 10, weight: 'bold' }, formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 1 ? '' : (pct>0 ? '+' : '') + Math.round(pct) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 1 ? '#2e8b57' : (pct < -1 ? '#b22222' : '#777'); } } },
-          { label: "Gauge", data: gageSeries, borderColor: "#6c757d", borderDash: [5, 5], borderWidth: 2, tension: 0.3, yAxisID: 'yGage', datalabels: { align: 'top', anchor: 'top', font: { size: 10, weight: 'bold' }, color: '#6c757d', formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 1 ? '' : (pct>0 ? '+' : '') + Math.round(pct) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 1 ? '#2e8b57' : (pct < -1 ? '#b22222' : '#777'); } } }
-        ]
-      },
-      options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 25, bottom: 20 } }, plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false } }, scales: { x: { display: true }, yFlow: { type: 'linear', display: true, position: 'left', beginAtZero: true, title: { display: true, text: 'cfs', color: '#0077cc' } }, yGage: { type: 'linear', display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'feet', color: '#6c757d' } } } }
-    });
-  } catch (e) { console.error("Error loading station", sid, e); }
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [
+        { label: "CFS", data: data.map(d => d.value), borderColor: "#0077cc", yAxisID: 'yFlow', datalabels: { align: 'bottom', formatter: (v, c) => c.dataIndex > 0 ? Math.round(((v-c.dataset.data[c.dataIndex-1])/c.dataset.data[c.dataIndex-1])*100) + '%' : '' } },
+        { label: "Ft", data: gageData.map(d => d.value), borderColor: "#6c757d", borderDash: [5,5], yAxisID: 'yGage', datalabels: { align: 'top', formatter: (v, c) => c.dataIndex > 0 ? Math.round(((v-c.dataset.data[c.dataIndex-1])/c.dataset.data[c.dataIndex-1])*100) + '%' : '' } }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { font: { size: 9 } } }, scales: { yFlow: { position: 'left' }, yGage: { position: 'right', grid: { drawOnChartArea: false } } } }
+  });
 }
 
 async function loadAll() {
-  const status = document.getElementById("status");
   const btn = document.getElementById("refresh-btn");
   btn.disabled = true;
-  status.textContent = "Updating stream data...";
   for (const s of stations) await loadStation(s);
   btn.disabled = false;
-  status.textContent = `Last refreshed at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+  document.getElementById("status").textContent = "Last update: " + new Date().toLocaleTimeString();
 }
 loadAll();
 </script>
