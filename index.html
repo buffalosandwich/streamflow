@@ -258,14 +258,12 @@ async function loadStation(station) {
     const seenDates = new Set();
     const gageMap = {};
 
-    // Build a quick lookup dictionary for the gauge readings by date
     for (const h of histGage) {
       if (h.time && h.value !== null) {
         gageMap[new Date(h.time).toLocaleDateString()] = h.value;
       }
     }
     
-    // Sync the Flow and Gauge arrays to share the exact same dates on the X-axis
     for (let i = histFlow.length - 1; i >= 0; i--) {
       if (!histFlow[i].time) continue;
       const dateObj = new Date(histFlow[i].time);
@@ -283,7 +281,6 @@ async function loadStation(station) {
 
     const labels = dailyFlow.map(d => d.timeLabel);
     const flowSeries = dailyFlow.map(d => d.value);
-    // Map the gauge values to the synchronized flow dates
     const gageSeries = dailyFlow.map(d => gageMap[d.dateStr] ?? null);
 
     const validFlows = flowSeries.filter(val => val !== null);
@@ -306,22 +303,68 @@ async function loadStation(station) {
             pointRadius: 3, 
             tension: 0.3, 
             yAxisID: 'yFlow', 
-            spanGaps: true 
+            spanGaps: true,
+            // FIXED: Custom datalabels applied directly to the Flow dataset
+            datalabels: {
+              align: 'bottom', // Pushes text down
+              anchor: 'bottom', // Anchors to the bottom of the dot
+              offset: 4,    
+              font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
+              textStrokeColor: 'rgba(255, 255, 255, 0.9)',
+              textStrokeWidth: 3,
+              formatter: function(value, context) {
+                const index = context.dataIndex;
+                if (index === 0) return ''; 
+                
+                const prevValue = context.dataset.data[index - 1];
+                if (!prevValue) return '';
+                
+                const pct = ((value - prevValue) / prevValue) * 100;
+                if (Math.abs(pct) < 0.1) return ''; 
+                
+                const sign = pct > 0 ? '+' : '';
+                return sign + pct.toFixed(1) + '%';
+              },
+              color: function(context) {
+                const index = context.dataIndex;
+                if (index === 0) return '#777'; 
+                
+                const prevValue = context.dataset.data[index - 1];
+                if (!prevValue) return '#777';
+                
+                const pct = ((context.dataset.data[index] - prevValue) / prevValue) * 100;
+                if (pct > 0.1) return '#2e8b57'; 
+                if (pct < -0.1) return '#b22222'; 
+                return '#777'; 
+              }
+            }
           },
-          // NEW: Second dataset for the Gauge Height
           { 
             label: "Gauge (ft)", 
             data: gageSeries, 
-            borderColor: "rgba(108, 117, 125, 0.8)", // Slate gray
+            borderColor: "rgba(108, 117, 125, 0.8)",
             backgroundColor: "transparent", 
-            borderDash: [5, 5], // Renders as a dashed line to visually separate it
+            borderDash: [5, 5],
             borderWidth: 2, 
             pointRadius: 3, 
             tension: 0.3, 
             yAxisID: 'yGage', 
             spanGaps: true,
-            // Explicitly tell the datalabels plugin NOT to draw text over this line
-            datalabels: { display: false }
+            // FIXED: Custom datalabels for the Gauge dataset
+            datalabels: { 
+              display: true,
+              align: 'top', // Pulls text up
+              anchor: 'top', // Anchors to the top of the dot
+              offset: 4,
+              font: { size: 10, weight: 'bold', family: 'Arial, sans-serif' },
+              color: 'rgba(108, 117, 125, 1)', // Matches the gray dashed line
+              textStrokeColor: 'rgba(255, 255, 255, 0.9)',
+              textStrokeWidth: 3,
+              formatter: function(value) {
+                if (value === null || value === undefined) return '';
+                return value.toFixed(2) + ' ft';
+              }
+            }
           }
         ]
       },
@@ -329,44 +372,12 @@ async function loadStation(station) {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-          padding: { top: 25, bottom: 5 } 
+          padding: { top: 25, bottom: 20 } // FIXED: Added bottom padding so the percentages don't hit the X-axis
         },
         plugins: {
           legend: { display: false }, 
-          tooltip: { mode: "index", intersect: false },
-          datalabels: {
-            align: 'top', 
-            anchor: 'end', 
-            offset: 4,    
-            font: { size: 11, weight: 'bold', family: 'Arial, sans-serif' }, 
-            textStrokeColor: 'rgba(255, 255, 255, 0.9)',
-            textStrokeWidth: 3,
-            formatter: function(value, context) {
-              const index = context.dataIndex;
-              if (index === 0) return ''; 
-              
-              const prevValue = context.dataset.data[index - 1];
-              if (!prevValue) return '';
-              
-              const pct = ((value - prevValue) / prevValue) * 100;
-              if (Math.abs(pct) < 0.1) return ''; 
-              
-              const sign = pct > 0 ? '+' : '';
-              return sign + pct.toFixed(1) + '%';
-            },
-            color: function(context) {
-              const index = context.dataIndex;
-              if (index === 0) return '#777'; 
-              
-              const prevValue = context.dataset.data[index - 1];
-              if (!prevValue) return '#777';
-              
-              const pct = ((context.dataset.data[index] - prevValue) / prevValue) * 100;
-              if (pct > 0.1) return '#2e8b57'; 
-              if (pct < -0.1) return '#b22222'; 
-              return '#777'; 
-            }
-          }
+          tooltip: { mode: "index", intersect: false }
+          // Global datalabels logic removed to prevent conflicts
         },
         scales: { 
           x: { display: true, ticks: { font: { size: 11, family: 'Arial, sans-serif' } } }, 
@@ -378,13 +389,12 @@ async function loadStation(station) {
             suggestedMax: dynamicYMax,
             ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(0, 123, 255, 1)' }
           },
-          // NEW: Configuration for the right-side Y-Axis for the Gauge
           yGage: {
             type: 'linear', 
             display: true, 
             position: 'right',
             beginAtZero: true,
-            grid: { drawOnChartArea: false }, // Hides the background grid lines so they don't clash with the left axis
+            grid: { drawOnChartArea: false },
             ticks: { font: { size: 10, family: 'Arial, sans-serif' }, color: 'rgba(108, 117, 125, 1)' }
           }
         }
