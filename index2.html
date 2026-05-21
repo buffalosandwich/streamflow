@@ -14,11 +14,9 @@
   button:active { transform: scale(0.98); }
   button:disabled { background: #888; cursor: not-allowed; }
   #status { font-size: 0.85em; color: #555; }
-  #streams { transition: opacity 0.3s ease; }
-  .card { background: white; padding: 12px; margin-bottom: 12px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+  .card { background: white; padding: 12px; margin-bottom: 12px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
   .name { font-size: 1.05em; font-weight: bold; margin-bottom: 4px; }
   .name a { color: #0077cc; text-decoration: none; }
-  .name a:hover { text-decoration: underline; }
   .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 6px; align-items: center; }
   .flow-guide, .story-guide { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid transparent; }
   .story-green { background: #d4edda; color: #155724; border-color: #c3e6cb; }
@@ -39,20 +37,19 @@
 <h1>SLV Streams Dashboard</h1>
 <div id="controls">
   <button id="refresh-btn" onclick="loadAll()">Refresh Now</button>
-  <div id="status">Loading dashboard...</div>
+  <div id="status">Loading...</div>
 </div>
 <div id="streams"></div>
 
 <div id="legend">
   <h2>Understanding River Conditions</h2>
-  <div class="legend-item"><div class="box" style="background: #d4edda;"></div> <strong>Green (&lt; 5% change):</strong> Stable. Conditions are generally predictable.</div>
-  <div class="legend-item"><div class="box" style="background: #fff3cd;"></div> <strong>Yellow (5% - 15% change):</strong> Shifting. Exercise caution; rising or falling pace is moderate.</div>
-  <div class="legend-item"><div class="box" style="background: #f8d7da;"></div> <strong>Red (&gt; 15% change):</strong> Volatile. High water or rapid change; potentially dangerous.</div>
+  <div class="legend-item"><div class="box" style="background: #d4edda;"></div> <strong>Green:</strong> Stable.</div>
+  <div class="legend-item"><div class="box" style="background: #fff3cd;"></div> <strong>Yellow:</strong> Shifting (5-15%).</div>
+  <div class="legend-item"><div class="box" style="background: #f8d7da;"></div> <strong>Red:</strong> Volatile (>15%).</div>
 </div>
 
 <script>
 Chart.register(ChartDataLabels);
-
 const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
 const stations = [
   { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
@@ -70,9 +67,10 @@ const stations = [
   { id: "LOSORTCO", name: "Los Pinos River Near Ortiz" }
 ];
 
-function fmtDate(d) { return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`; }
+function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
 async function fetchDWR(sid, param) {
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${sid}&parameter=${param}&startDate=${fmtDate(new Date(Date.now()-864000000))}&endDate=${fmtDate(new Date(Date.now()+86400000))}&apiKey=${encodeURIComponent(apiKey)}`;
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${sid}&parameter=${param}&startDate=${new Date(Date.now()-864000000).toLocaleDateString()}&endDate=${new Date(Date.now()+86400000).toLocaleDateString()}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
@@ -85,72 +83,59 @@ const container = document.getElementById("streams");
 stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
-  card.innerHTML = `
-    <div class="name"><a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank">${s.name}</a></div>
-    <div class="row" id="row-${s.id}"></div>
-    <div id="flow-guide-${s.id}" style="display:none;"></div>
-    <div id="story-guide-${s.id}" style="display:none;"></div>
-    <div class="alert" id="alert-${s.id}" style="display:none;"></div>
-    <div class="chart-wrapper"><canvas id="chart-${s.id}"></canvas></div>
-  `;
+  card.innerHTML = `<div class="name"><a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank">${s.name}</a></div><div class="row" id="row-${s.id}"></div><div id="flow-guide-${s.id}" style="display:none;"></div><div id="story-guide-${s.id}" style="display:none;"></div><div class="alert" id="alert-${s.id}" style="display:none;"></div><div class="chart-wrapper"><canvas id="chart-${s.id}"></canvas></div>`;
   container.appendChild(card);
 });
 
 async function loadStation(s) {
   const [hFlow, hGage, hTemp] = await Promise.all([fetchDWR(s.id, "DISCHRG"), fetchDWR(s.id, s.gageParam || "GAGE_HT"), fetchDWR(s.id, "TEMP")]);
-  
-  const latestFlow = hFlow.length ? hFlow[hFlow.length-1].value : null;
-  const prevFlow = hFlow.length > 1 ? hFlow[hFlow.length-2].value : null;
-  const flow7 = hFlow.length > 24*7 ? hFlow[hFlow.length - (24*7)].value : null;
+  if (!hFlow.length) return; 
+
+  const latestFlow = hFlow[hFlow.length-1].value;
   const temp = hTemp.length ? hTemp[hTemp.length-1].value : null;
+  document.getElementById(`row-${s.id}`).innerHTML = `<span class="label">Flow:</span> <span class="value">${latestFlow?.toFixed(0) || '—'} cfs ${temp ? '| Temp: ' + temp.toFixed(0) + '°F' : ''}</span>`;
 
-  const row = document.getElementById(`row-${s.id}`);
-  row.innerHTML = `<span class="label">Flow:</span> <span class="value">${latestFlow?.toFixed(0) || '—'} cfs ${temp ? '| Temp: ' + temp.toFixed(0) + '°F' : ''}</span>`;
-
-  const flowPct = percentChange(latestFlow, prevFlow);
-  if (latestFlow && prevFlow && flow7) {
+  const prevFlow = hFlow.length > 1 ? hFlow[hFlow.length-2].value : null;
+  const flow7 = hFlow.length > 24*7 ? hFlow[hFlow.length-24*7].value : null;
+  if (prevFlow && flow7) {
+    const pct1 = ((latestFlow-prevFlow)/prevFlow)*100;
+    const pct7 = ((latestFlow-flow7)/flow7)*100;
+    const theme = Math.abs(pct1) > 15 ? "story-red" : (Math.abs(pct1) >= 5 ? "story-yellow" : "story-green");
     const div = document.getElementById(`flow-guide-${s.id}`);
-    const theme = Math.abs(flowPct) > 15 ? "story-red" : (Math.abs(flowPct) >= 5 ? "story-yellow" : "story-green");
-    div.className = `flow-guide ${theme}`;
-    div.style.display = "block";
-    div.innerHTML = `Flow is <strong>${Math.round(Math.abs(flowPct))}% ${flowPct >= 0 ? "more" : "less"}</strong> than yesterday and has <strong>${flowPct >= 0 ? "increased" : "decreased"} ${Math.round(Math.abs(percentChange(latestFlow, flow7)))}%</strong> since last week.`;
+    div.className = `flow-guide ${theme}`; div.style.display = "block";
+    div.innerHTML = `Flow is <strong>${Math.round(Math.abs(pct1))}% ${pct1 >= 0 ? "more" : "less"}</strong> than yesterday and has <strong>${pct7 >= 0 ? "increased" : "decreased"} ${Math.round(Math.abs(pct7))}%</strong> since last week.`;
+    if (Math.abs(pct1) >= 10) { document.getElementById(`alert-${s.id}`).style.display = "block"; document.getElementById(`alert-${s.id}`).textContent = `⚠ Rapid flow change: ${Math.round(pct1)}%`; }
   }
 
   const gage = hGage.length ? hGage[hGage.length-1].value : null;
   const gage1 = hGage.length > 24 ? hGage[hGage.length-25].value : null;
   if (gage && gage1) {
-    const diff = gage - gage1;
-    const theme = Math.abs(percentChange(gage, gage1)) > 15 ? "story-red" : (Math.abs(percentChange(gage, gage1)) >= 5 ? "story-yellow" : "story-green");
+    const pct1G = ((gage-gage1)/gage1)*100;
     const div = document.getElementById(`story-guide-${s.id}`);
-    div.className = `story-guide ${theme}`;
+    div.className = `story-guide ${Math.abs(pct1G) > 15 ? "story-red" : (Math.abs(pct1G) >= 5 ? "story-yellow" : "story-green")}`;
     div.style.display = "block";
-    div.innerHTML = `<strong>Gauge Height: ${gage.toFixed(1)} ft:</strong> The water is <strong>${Math.round(Math.abs(diff)*12)} inches ${diff >= 0 ? "higher" : "lower"}</strong> than yesterday.`;
+    div.innerHTML = `<strong>Gauge Height: ${gage.toFixed(1)} ft:</strong> Water is <strong>${Math.round(Math.abs(gage-gage1)*12)} inches ${gage >= gage1 ? "higher" : "lower"}</strong> than yesterday.`;
   }
 
-  const ctx = document.getElementById(`chart-${s.id}`).getContext("2d");
-  const data = hFlow.slice(-24);
-  const labels = data.map(d => new Date(d.time).getHours() + ":00");
-  const gageData = hGage.slice(-24);
-
-  new Chart(ctx, {
+  new Chart(document.getElementById(`chart-${s.id}`).getContext("2d"), {
     type: "line",
     data: {
-      labels: labels,
+      labels: hFlow.slice(-24).map(d => new Date(d.time).getHours() + ":00"),
       datasets: [
-        { label: "CFS", data: data.map(d => d.value), borderColor: "#0077cc", yAxisID: 'yFlow', datalabels: { align: 'bottom', formatter: (v, c) => c.dataIndex > 0 ? Math.round(((v-c.dataset.data[c.dataIndex-1])/c.dataset.data[c.dataIndex-1])*100) + '%' : '' } },
-        { label: "Ft", data: gageData.map(d => d.value), borderColor: "#6c757d", borderDash: [5,5], yAxisID: 'yGage', datalabels: { align: 'top', formatter: (v, c) => c.dataIndex > 0 ? Math.round(((v-c.dataset.data[c.dataIndex-1])/c.dataset.data[c.dataIndex-1])*100) + '%' : '' } }
+        { label: "Flow", data: hFlow.slice(-24).map(d => d.value), borderColor: "#0077cc", yAxisID: 'yFlow', datalabels: { display: false } },
+        { label: "Gauge", data: hGage.slice(-24).map(d => d.value), borderColor: "#6c757d", borderDash: [5,5], yAxisID: 'yGage', datalabels: { display: false } }
       ]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { font: { size: 9 } } }, scales: { yFlow: { position: 'left' }, yGage: { position: 'right', grid: { drawOnChartArea: false } } } }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { yFlow: { position: 'left' }, yGage: { position: 'right', grid: { drawOnChartArea: false } } } }
   });
 }
 
 async function loadAll() {
-  const btn = document.getElementById("refresh-btn");
-  btn.disabled = true;
-  for (const s of stations) await loadStation(s);
-  btn.disabled = false;
-  document.getElementById("status").textContent = "Last update: " + new Date().toLocaleTimeString();
+  document.getElementById("refresh-btn").disabled = true;
+  document.getElementById("status").textContent = "Loading streams...";
+  for (const s of stations) { await loadStation(s); await delay(500); }
+  document.getElementById("refresh-btn").disabled = false;
+  document.getElementById("status").textContent = "Last updated: " + new Date().toLocaleTimeString();
 }
 loadAll();
 </script>
