@@ -1,248 +1,1216 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SLV Streams Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-<style>
-  body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
-  h1 { font-size: 1.4em; margin: 10px 0; }
-  #controls { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
-  button { padding: 8px 14px; border-radius: 6px; border: none; background: #0077cc; color: white; font-size: 0.95em; cursor: pointer; }
-  button:active { transform: scale(0.98); }
-  button:disabled { background: #888; cursor: not-allowed; }
-  #status { font-size: 0.85em; color: #555; }
-  #streams { transition: opacity 0.3s ease; }
-  .card { background: white; padding: 12px; margin-bottom: 12px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
-  .name { font-size: 1.05em; font-weight: bold; margin-bottom: 4px; }
-  .name a { color: #0077cc; text-decoration: none; }
-  .name a:hover { text-decoration: underline; }
-  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 6px; align-items: center; }
-  
-  .flow-guide, .story-guide { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; display: inline-block; border: 1px solid transparent; }
-  .story-green { background: #d4edda; color: #155724; border-color: #c3e6cb; }
-  .story-green strong { color: #0b2e13; }
-  .story-yellow { background: #fff3cd; color: #856404; border-color: #ffeeba; }
-  .story-yellow strong { color: #533f03; }
-  .story-red { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-  .story-red strong { color: #4c1118; }
-  
-  .alert { margin-top: 6px; padding: 4px 6px; border-radius: 6px; background: #ffe5e5; color: #b00000; font-size: 0.8em; }
-  .chart-wrapper { position: relative; height: 180px; width: 100%; margin-top: 6px; }
-  
-  #legend { margin-top: 20px; padding: 15px; background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-  #legend h2 { font-size: 1.1em; margin-top: 0; }
-  .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9em; }
-  .box { width: 20px; height: 20px; border-radius: 4px; margin-right: 10px; }
-</style>
-</head>
-<body>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>San Luis Valley Stream & Reservoir Tracker</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js & Datalabels Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-<h1>SLV Streams Dashboard</h1>
-<div id="controls">
-  <button id="refresh-btn" onclick="loadAll()">Refresh Now</button>
-  <div id="status">Loading dashboard for the first time...</div>
-</div>
-<div id="streams"></div>
-
-<div id="legend">
-  <h2>Understanding River Conditions</h2>
-  <div class="legend-item"><div class="box" style="background: #d4edda;"></div> <strong>Green (&lt; 5% change):</strong> Stable. Conditions are generally predictable.</div>
-  <div class="legend-item"><div class="box" style="background: #fff3cd;"></div> <strong>Yellow (5% - 15% change):</strong> Shifting. Exercise caution; rising or falling pace is moderate.</div>
-  <div class="legend-item"><div class="box" style="background: #f8d7da;"></div> <strong>Red (&gt; 15% change):</strong> Volatile. High water or rapid change; potentially dangerous.</div>
-</div>
-
-<script>
-Chart.register(ChartDataLabels);
-
-const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
-
-const stations = [
-  { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
-  { id: "ARKSALCO", name: "Arkansas River at Salida, CO" },
-  { id: "ALABELCO", name: "Alamosa River Below Terrace Reservoir" },
-  { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
-  { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir" },
-  { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
-  { id: "CONMOGCO", name: "Conejos River Near Mogote", gageParam: "GAGE_HT2" },
-  { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
-  { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
-  { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
-  { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" },
-  { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" },
-  { id: "LOSORTCO", name: "Los Pinos River Near Ortiz" }
-];
-
-stations.sort((a, b) => a.name.localeCompare(b.name));
-
-const PARAMS = { DISCHRG: { label: "Current Flow" } };
-const DWR_PARAM_MAP = { DISCHRG: "DISCHRG", GAGE_HT: "GAGE_HT", GAGE_HT2: "GAGE_HT2" };
-
-function fmtDate(date) {
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${m}/${d}/${date.getFullYear()}`;
-}
-
-function percentChange(current, past) {
-  if (current == null || past == null || past === 0) return null;
-  return ((current - past) / past) * 100;
-}
-
-async function fetchDWRHistory(stationId, paramKey) {
-  const dwrParam = DWR_PARAM_MAP[paramKey] || paramKey;
-  if (!dwrParam) return [];
-  const now = new Date();
-  const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${stationId}&parameter=${dwrParam}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(tomorrow)}&apiKey=${encodeURIComponent(apiKey)}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const json = await res.json();
-    const list = json.ResultList || [];
-    return list.map(d => ({ time: d.measDate || d.measDateTime, value: d.measValue != null ? Number(d.measValue) : null }));
-  } catch(e) { return []; }
-}
-
-function getLatestAndPrev(history) {
-  if (!history || !history.length) return { latestValue: null, latestTime: null, prevValue: null, prevTime: null };
-  const latest = history[history.length - 1];
-  const prev = history.length > 1 ? history[history.length - 2] : null;
-  return { latestValue: latest.value, latestTime: latest.time, prevValue: prev ? prev.value : null, prevTime: prev ? prev.time : null };
-}
-
-const container = document.getElementById("streams");
-stations.forEach(s => {
-  const card = document.createElement("div");
-  card.className = "card";
-  card.id = `card-${s.id}`;
-  card.innerHTML = `
-    <div class="name"><a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank" rel="noopener noreferrer">${s.name}</a></div>
-    <div class="row" id="row-${s.id}-DISCHRG"></div>
-    <div id="flow-guide-${s.id}" style="display:none;"></div>
-    <div id="story-guide-${s.id}" style="display:none;"></div>
-    <div class="alert" id="alert-${s.id}" style="display:none;"></div>
-    <div class="chart-wrapper"><canvas id="chart-${s.id}"></canvas></div>
-  `;
-  container.appendChild(card);
-});
-
-const charts = {};
-
-function valueAtTarget(history, latestTime, days) {
-  if (!history.length || !latestTime) return null;
-  const target = new Date(latestTime).getTime() - (days * 24 * 60 * 60 * 1000);
-  let best = history[0]; 
-  for (const h of history) {
-    const t = new Date(h.time).getTime();
-    if (t <= target) best = h;
-    else break;
-  }
-  return best ? best.value : null;
-}
-
-function formatInches(feet) {
-  let inches = Math.round(Math.abs(feet) * 12);
-  if (inches === 0) return "0 inches";
-  let f = Math.floor(inches / 12);
-  let i = inches % 12;
-  let parts = [];
-  if (f > 0) parts.push(f + (f === 1 ? " foot" : " feet"));
-  if (i > 0) parts.push(i + (i === 1 ? " inch" : " inches"));
-  return parts.join(" ");
-}
-
-async function loadStation(station) {
-  const sid = station.id;
-  try {
-    const targetGageParam = station.gageParam || "GAGE_HT";
-    const histFlow = await fetchDWRHistory(sid, "DISCHRG");
-    const histGage = await fetchDWRHistory(sid, targetGageParam).catch(() => []);
-
-    const flow = getLatestAndPrev(histFlow);
-    const flow1 = valueAtTarget(histFlow, flow.latestTime, 1);
-    const flow7 = valueAtTarget(histFlow, flow.latestTime, 7);
-    const pct1Flow = percentChange(flow.latestValue, flow1);
-    const pct7Flow = percentChange(flow.latestValue, flow7);
-
-    const flowGuideDiv = document.getElementById(`flow-guide-${sid}`);
-    if (flow.latestValue != null && flow1 != null && flow7 != null) {
-      const absPct1 = Math.round(Math.abs(pct1Flow));
-      const moreLess = pct1Flow >= 0 ? "more" : "less";
-      const absPct7 = Math.round(Math.abs(pct7Flow));
-      const increasedDecreased = pct7Flow >= 0 ? "increased" : "decreased";
-      const themeClass = Math.abs(pct1Flow) > 15 ? "story-red" : (Math.abs(pct1Flow) >= 5 ? "story-yellow" : "story-green");
-      flowGuideDiv.className = `flow-guide ${themeClass}`;
-      flowGuideDiv.style.display = "block";
-      flowGuideDiv.innerHTML = `<strong>Current Flow: ${Math.round(flow.latestValue)} cfs,</strong> this is <strong>${absPct1}% ${moreLess}</strong> than yesterday and has <strong>${increasedDecreased} ${absPct7}%</strong> since last week.`;
-    }
-
-    const storyGuideDiv = document.getElementById(`story-guide-${sid}`);
-    const gage = getLatestAndPrev(histGage);
-    const gage1 = valueAtTarget(histGage, gage.latestTime, 1);
-    const gage7 = valueAtTarget(histGage, gage.latestTime, 7);
-    if (gage.latestValue != null && gage1 != null && gage7 != null) {
-      const diffFeet = gage.latestValue - gage1;
-      const formattedInches = formatInches(diffFeet);
-      const higherLower1 = diffFeet >= 0 ? "higher" : "lower";
-      const pct1Gage = percentChange(gage.latestValue, gage1);
-      const risenDropped1 = pct1Gage >= 0 ? "risen" : "dropped";
-      const pct7Gage = percentChange(gage.latestValue, gage7);
-      const themeClass = Math.abs(pct1Gage) > 15 ? "story-red" : (Math.abs(pct1Gage) >= 5 ? "story-yellow" : "story-green");
-      storyGuideDiv.className = `story-guide ${themeClass}`;
-      storyGuideDiv.style.display = "block";
-      // FIXED: Using formatInches for the current gauge reading too
-      storyGuideDiv.innerHTML = `<strong>Current Gauge Height: ${formatInches(gage.latestValue)}:</strong> The water is <strong>${formattedInches} ${higherLower1}</strong> than yesterday and has ${risenDropped1} <strong>${Math.round(Math.abs(pct1Gage))}%</strong>, which is <strong>${Math.round(Math.abs(pct7Gage))}% ${pct7Gage >= 0 ? "higher" : "lower"}</strong> than last week.`;
-    }
-
-    const alertDiv = document.getElementById(`alert-${sid}`);
-    if (flow.latestValue != null && flow.prevValue != null && percentChange(flow.latestValue, flow.prevValue) >= 10) {
-      alertDiv.style.display = "block";
-      alertDiv.textContent = `⚠ Rapid rise in flow: ${Math.round(percentChange(flow.latestValue, flow.prevValue))}% increase.`;
-    } else { alertDiv.style.display = "none"; }
-
-    const ctx = document.getElementById(`chart-${sid}`).getContext("2d");
-    const dailyFlow = [], seenDates = new Set(), gageMap = {};
-    for (const h of histGage) if (h.time && h.value !== null) gageMap[new Date(h.time).toLocaleDateString()] = h.value;
-    for (let i = histFlow.length - 1; i >= 0; i--) {
-      if (!histFlow[i].time) continue;
-      const dateStr = new Date(histFlow[i].time).toLocaleDateString();
-      if (!seenDates.has(dateStr)) {
-        seenDates.add(dateStr);
-        dailyFlow.unshift({ dateStr: dateStr, value: histFlow[i].value });
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
+              900: '#082f49',
+            },
+            forest: {
+              50: '#f2f9f5',
+              100: '#e1f2e8',
+              500: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+            },
+            amber: {
+              50: '#fffbeb',
+              100: '#fef3c7',
+              500: '#d97706',
+              700: '#b45309',
+            },
+            rose: {
+              50: '#fff1f2',
+              100: '#ffe4e6',
+              500: '#e11d48',
+              700: '#be123c',
+            }
+          }
+        }
       }
     }
-    const flowSeries = dailyFlow.map(d => d.value);
-    const gageSeries = dailyFlow.map(d => gageMap[d.dateStr] ?? null);
+  </script>
 
-    if (charts[sid]) charts[sid].destroy();
-    charts[sid] = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: dailyFlow.map(d => `${new Date(d.dateStr).getMonth() + 1}/${new Date(d.dateStr).getDate()}`),
-        datasets: [
-          { label: "Flow", data: flowSeries, borderColor: "#0077cc", borderWidth: 2, tension: 0.3, yAxisID: 'yFlow', datalabels: { align: 'bottom', anchor: 'bottom', font: { size: 10, weight: 'bold' }, formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 1 ? '' : (pct>0 ? '+' : '') + Math.round(pct) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 1 ? '#2e8b57' : (pct < -1 ? '#b22222' : '#777'); } } },
-          { label: "Gauge", data: gageSeries, borderColor: "#6c757d", borderDash: [5, 5], borderWidth: 2, tension: 0.3, yAxisID: 'yGage', datalabels: { align: 'top', anchor: 'top', font: { size: 10, weight: 'bold' }, color: '#6c757d', formatter: (v, ctx) => { if(ctx.dataIndex===0) return ''; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((v-p)/p)*100; return Math.abs(pct) < 1 ? '' : (pct>0 ? '+' : '') + Math.round(pct) + '%'; }, color: (ctx) => { if(ctx.dataIndex===0) return '#777'; const p = ctx.dataset.data[ctx.dataIndex-1]; const pct = ((ctx.dataset.data[ctx.dataIndex]-p)/p)*100; return pct > 1 ? '#2e8b57' : (pct < -1 ? '#b22222' : '#777'); } } }
-        ]
-      },
-      options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 25, bottom: 20 } }, plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false } }, scales: { x: { display: true }, yFlow: { type: 'linear', display: true, position: 'left', beginAtZero: true, title: { display: true, text: 'cfs', color: '#0077cc' } }, yGage: { type: 'linear', display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'feet', color: '#6c757d' } } } }
+  <style>
+    /* Prevent text selection during chart touch drag */
+    canvas {
+      touch-action: pan-y;
+      user-select: none;
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen pb-16">
+
+  <!-- Header Bar -->
+  <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 text-white shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-4">
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-inner">
+            <i class="fa-solid fa-water text-white text-lg"></i>
+          </div>
+          <div>
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+              SLV Water & Fishing Intel
+              <span class="hidden sm:inline-block px-2 py-0.5 text-[11px] font-semibold bg-sky-500/20 text-sky-300 rounded-full border border-sky-400/30">Colorado DWR</span>
+            </h1>
+            <p class="text-xs text-slate-400">San Luis Valley Real-Time Hydrology & Reservoir Storage</p>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center gap-2">
+          <button id="toggle-legend-btn" onclick="toggleLegendModal()" class="p-2 sm:px-3 sm:py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5" title="Condition Legend">
+            <i class="fa-solid fa-circle-info text-amber-400"></i>
+            <span class="hidden sm:inline">Guide & Legend</span>
+          </button>
+          
+          <button id="refresh-btn" onclick="handleRefresh()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white shadow-sm transition flex items-center gap-1.5">
+            <i id="refresh-icon" class="fa-solid fa-rotate"></i>
+            <span id="refresh-text" class="hidden sm:inline">Refresh Data</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telemetry Status Bar -->
+    <div class="bg-slate-950/80 px-4 py-1.5 border-t border-slate-800/80 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 max-w-7xl mx-auto">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="sync-status">Ready to load telemetry...</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="last-updated-time">Last update: Pending</span>
+        <span class="text-slate-600">•</span>
+        <label class="flex items-center gap-1.5 cursor-pointer hover:text-slate-300 transition">
+          <input type="checkbox" id="demo-mode-toggle" onchange="toggleDataSource()" class="w-3.5 h-3.5 accent-sky-500 rounded">
+          <span>Fast Demo Mode</span>
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+    
+    <!-- Top KPI Highlights Bar -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+      <div class="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Tracked Waters</p>
+          <p class="text-lg sm:text-xl font-bold text-slate-800">21 <span class="text-xs font-normal text-slate-500">(13 St / 8 Res)</span></p>
+        </div>
+        <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-sm">
+          <i class="fa-solid fa-map-location-dot"></i>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Stable Waters</p>
+          <p id="kpi-stable-count" class="text-lg sm:text-xl font-bold text-emerald-600">—</p>
+        </div>
+        <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Shifting / Caution</p>
+          <p id="kpi-shifting-count" class="text-lg sm:text-xl font-bold text-amber-600">—</p>
+        </div>
+        <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-sm">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div>
+          <p class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Rapid Surge (&ge;10%)</p>
+          <p id="kpi-alert-count" class="text-lg sm:text-xl font-bold text-rose-600">—</p>
+        </div>
+        <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-sm">
+          <i class="fa-solid fa-bolt"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Pills & Search Box -->
+    <div class="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <!-- Pills -->
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-xs">
+        <button onclick="setFilter('all')" id="filter-all" class="filter-btn px-3 py-1.5 rounded-lg font-semibold bg-slate-900 text-white shadow-xs transition whitespace-nowrap">
+          All Waters (21)
+        </button>
+        <button onclick="setFilter('streams')" id="filter-streams" class="filter-btn px-3 py-1.5 rounded-lg font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition whitespace-nowrap">
+          <i class="fa-solid fa-fish-fins text-sky-600 mr-1"></i> Rivers (13)
+        </button>
+        <button onclick="setFilter('reservoirs')" id="filter-reservoirs" class="filter-btn px-3 py-1.5 rounded-lg font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition whitespace-nowrap">
+          <i class="fa-solid fa-mountain-sun text-indigo-600 mr-1"></i> Reservoirs (8)
+        </button>
+        <button onclick="setFilter('alerts')" id="filter-alerts" class="filter-btn px-3 py-1.5 rounded-lg font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition whitespace-nowrap">
+          <i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1"></i> Volatile & Alerts
+        </button>
+      </div>
+
+      <!-- Search Input -->
+      <div class="relative w-full md:w-72">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+        <input 
+          type="text" 
+          id="search-input" 
+          oninput="handleSearch()" 
+          placeholder="Filter by name (e.g. Conejos, Platoro)..." 
+          class="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition"
+        />
+        <button id="clear-search-btn" onclick="clearSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Cards Grid -->
+    <div id="cards-container" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <!-- Dynamic station cards injected via JS -->
+    </div>
+
+    <!-- Empty Results Fallback -->
+    <div id="empty-state" class="hidden text-center py-16 bg-white rounded-2xl border border-slate-200 p-8 shadow-xs">
+      <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-2xl mb-3">
+        <i class="fa-solid fa-water-ladder"></i>
+      </div>
+      <h3 class="text-base font-bold text-slate-800 mb-1">No Waters Match Your Filter</h3>
+      <p class="text-xs text-slate-500 max-w-sm mx-auto mb-4">Try clearing your search query or selecting "All Waters" to inspect available river gauges and reservoirs.</p>
+      <button onclick="resetFilters()" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-lg shadow-sm">
+        Reset Search & Filters
+      </button>
+    </div>
+  </main>
+
+  <!-- Legend Modal Drawer -->
+  <div id="legend-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center p-4 transition-all duration-300">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden transform scale-95 transition-transform duration-200" id="legend-dialog">
+      <!-- Drawer Header -->
+      <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <i class="fa-solid fa-compass text-amber-400 text-lg"></i>
+          <div>
+            <h3 class="text-sm font-bold">Understanding Stream & Reservoir Intel</h3>
+            <p class="text-[11px] text-slate-300">Wading safety, water clarity, and temperature guidelines</p>
+          </div>
+        </div>
+        <button onclick="toggleLegendModal()" class="text-slate-400 hover:text-white p-1 text-base">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Drawer Content -->
+      <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-slate-700">
+        <!-- Stoplight Colors -->
+        <div>
+          <h4 class="font-bold text-slate-900 mb-2 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+            <i class="fa-solid fa-traffic-light text-slate-700"></i> Stoplight Volatility System
+          </h4>
+          <div class="space-y-2">
+            <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2.5">
+              <span class="w-3.5 h-3.5 rounded-full bg-emerald-500 shrink-0 mt-0.5 shadow-xs"></span>
+              <div>
+                <p class="font-bold text-emerald-950">Green (&lt; 5% Daily Change) — Prime & Stable</p>
+                <p class="text-emerald-800 text-[11px] mt-0.5">Flow and gauge depth have remained steady over 24 hours. Clarity is typically optimal and wading conditions are consistent.</p>
+              </div>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5">
+              <span class="w-3.5 h-3.5 rounded-full bg-amber-500 shrink-0 mt-0.5 shadow-xs"></span>
+              <div>
+                <p class="font-bold text-amber-950">Yellow (5.1% – 15% Change) — Shifting Water</p>
+                <p class="text-amber-800 text-[11px] mt-0.5">Moderate flow adjustment or reservoir release. Watch for stained water, drifting debris, and slightly increased wading resistance.</p>
+              </div>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2.5">
+              <span class="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0 mt-0.5 shadow-xs"></span>
+              <div>
+                <p class="font-bold text-rose-950">Red (&gt; 15% Change) — Volatile / Caution</p>
+                <p class="text-rose-800 text-[11px] mt-0.5">High surge, blowout, or rapid drawdown. Wading can quickly become dangerous; stream bottom visibility drops significantly.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rapid Rise Alert Badge -->
+        <div class="border-t border-slate-200 pt-3">
+          <h4 class="font-bold text-slate-900 mb-1 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+            <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> Rapid Rise Threshold (&ge; 10%)
+          </h4>
+          <p class="text-slate-600 text-[11px]">
+            If flow rises by <strong>10% or more between consecutive telemetry updates</strong>, an amber/red flash banner activates. This catches sudden dam gate releases (like Beaver or Platoro) or heavy flash rainstorms in the mountains.
+          </p>
+        </div>
+
+        <!-- Water Temperature Guide -->
+        <div class="border-t border-slate-200 pt-3">
+          <h4 class="font-bold text-slate-900 mb-1.5 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+            <i class="fa-solid fa-temperature-half text-sky-500"></i> Trout Temperature Zones (°F)
+          </h4>
+          <div class="grid grid-cols-3 gap-2 text-center text-[10px]">
+            <div class="p-2 bg-slate-100 rounded-lg">
+              <span class="block font-bold text-slate-700">&lt; 45°F</span>
+              <span class="text-slate-500">Sluggish / Winter</span>
+            </div>
+            <div class="p-2 bg-emerald-100/70 border border-emerald-300/50 rounded-lg">
+              <span class="block font-bold text-emerald-800">48°F – 64°F</span>
+              <span class="text-emerald-700 font-semibold">Prime Feeding</span>
+            </div>
+            <div class="p-2 bg-rose-100/70 border border-rose-300/50 rounded-lg">
+              <span class="block font-bold text-rose-800">&gt; 67°F</span>
+              <span class="text-rose-700 font-semibold">Stress / Cease Fish</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metric Reading -->
+        <div class="border-t border-slate-200 pt-3">
+          <h4 class="font-bold text-slate-900 mb-1 uppercase tracking-wider text-[11px]">Dual Y-Axis Graph Reference</h4>
+          <p class="text-slate-600 text-[11px]">
+            • <strong>Streams:</strong> Solid Blue = Flow (cfs, left axis) | Dashed Slate = Gauge Stage (feet, right axis).<br>
+            • <strong>Reservoirs:</strong> Solid Emerald = Usable Storage (ac-ft, left axis) | Dashed Blue = Surface Elevation (feet, right axis).
+          </p>
+        </div>
+      </div>
+
+      <div class="p-3 bg-slate-50 border-t border-slate-200 text-right">
+        <button onclick="toggleLegendModal()" class="px-4 py-1.5 text-xs font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition">
+          Close Guide
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    Chart.register(ChartDataLabels);
+
+    const DWR_API_KEY = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
+
+    // Complete set of 13 Stream Telemetry Stations
+    const STREAMS_LIST = [
+      { id: "ALABELCO", name: "Alamosa River Below Terrace Reservoir", type: "stream", river: "Alamosa", gageParam: "GAGE_HT" },
+      { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir", type: "stream", river: "Alamosa", gageParam: "GAGE_HT" },
+      { id: "ARKSALCO", name: "Arkansas River at Salida, CO", type: "stream", river: "Arkansas", gageParam: "GAGE_HT" },
+      { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir", type: "stream", river: "Beaver Creek", gageParam: "GAGE_HT" },
+      { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir", type: "stream", river: "Conejos", gageParam: "GAGE_HT" },
+      { id: "CONMOGCO", name: "Conejos River Near Mogote", type: "stream", river: "Conejos", gageParam: "GAGE_HT2" },
+      { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin", type: "stream", river: "La Jara", gageParam: "GAGE_HT" },
+      { id: "LOSORTCO", name: "Los Pinos River Near Ortiz", type: "stream", river: "Los Pinos", gageParam: "GAGE_HT" },
+      { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir", type: "stream", river: "Clear Creek", gageParam: "GAGE_HT" },
+      { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede", type: "stream", river: "Rio Grande", gageParam: "GAGE_HT" },
+      { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap", type: "stream", river: "Rio Grande", gageParam: "GAGE_HT" },
+      { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses", type: "stream", river: "Rio Grande", gageParam: "GAGE_HT" },
+      { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir", type: "stream", river: "Trinchera", gageParam: "GAGE_HT" }
+    ];
+
+    // Complete set of 8 Reservoir Storage Stations
+    const RESERVOIRS_LIST = [
+      { id: "BEVRESCO", name: "Beaver Reservoir", type: "reservoir", elev: "8,770 ft", capacity: "4,430 ac-ft" },
+      { id: "CONRESCO", name: "Continental Reservoir", type: "reservoir", elev: "10,270 ft", capacity: "26,710 ac-ft" },
+      { id: "LAJRESCO", name: "La Jara Reservoir", type: "reservoir", elev: "9,700 ft", capacity: "14,050 ac-ft" },
+      { id: "MTNRESCO", name: "Mountain Home Reservoir", type: "reservoir", elev: "8,150 ft", capacity: "18,450 ac-ft" },
+      { id: "PLARESCO", name: "Platoro Reservoir", type: "reservoir", elev: "9,980 ft", capacity: "59,570 ac-ft" },
+      { id: "RIORESCO", name: "Rio Grande Reservoir", type: "reservoir", elev: "9,390 ft", capacity: "51,110 ac-ft" },
+      { id: "SANRESCO", name: "Sanchez Reservoir", type: "reservoir", elev: "8,260 ft", capacity: "103,200 ac-ft" },
+      { id: "TERRESCO", name: "Terrace Reservoir", type: "reservoir", elev: "8,500 ft", capacity: "17,700 ac-ft" }
+    ];
+
+    // Combined master dataset
+    const ALL_STATIONS = [
+      ...STREAMS_LIST.map(s => ({ ...s, category: 'stream' })),
+      ...RESERVOIRS_LIST.map(r => ({ ...r, category: 'reservoir' }))
+    ].sort((a, b) => a.name.localeCompare(b.name));
+
+    // Global state
+    let activeFilter = 'all';
+    let searchQuery = '';
+    let demoMode = false;
+    const chartsInstances = {};
+    const stationDataCache = {};
+
+    // Convert decimal feet into "X ft Y in" or "Y in"
+    function formatFeetAndInches(feet) {
+      if (feet == null || isNaN(feet)) return "—";
+      const totalInches = Math.round(Math.abs(feet) * 12);
+      const f = Math.floor(totalInches / 12);
+      const i = totalInches % 12;
+      if (f === 0 && i === 0) return "0 in";
+      const parts = [];
+      if (f > 0) parts.push(`${f} ft`);
+      if (i > 0) parts.push(`${i} in`);
+      return parts.join(" ");
+    }
+
+    // Safely calculate percentage change
+    function calculatePercentChange(current, past) {
+      if (current == null || past == null || past === 0) return null;
+      return ((current - past) / Math.abs(past)) * 100;
+    }
+
+    // Format Date for DWR REST Query: MM/DD/YYYY
+    function formatDWRDate(date) {
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${m}/${d}/${date.getFullYear()}`;
+    }
+
+    // Sleep utility for throttling API requests to protect quota
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Determine stoplight condition class from percentage change
+    function getStoplightTheme(pct) {
+      if (pct == null) return { class: 'story-green', color: 'emerald', text: 'Stable' };
+      const abs = Math.abs(pct);
+      if (abs > 15) return { class: 'story-red', border: 'border-rose-500', bg: 'bg-rose-50/80', textCol: 'text-rose-950', badgeBg: 'bg-rose-100 text-rose-800 border-rose-200' };
+      if (abs >= 5) return { class: 'story-yellow', border: 'border-amber-500', bg: 'bg-amber-50/80', textCol: 'text-amber-950', badgeBg: 'bg-amber-100 text-amber-800 border-amber-200' };
+      return { class: 'story-green', border: 'border-emerald-500', bg: 'bg-emerald-50/80', textCol: 'text-emerald-950', badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+    }
+
+    // Classify Trout comfort based on water temperature
+    function getTroutTempStatus(tempF) {
+      if (tempF == null) return null;
+      if (tempF < 45) return { label: 'Cold / Slow', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+      if (tempF <= 64) return { label: 'Prime Feeding', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      if (tempF <= 67) return { label: 'Warm Caution', color: 'bg-amber-50 text-amber-700 border-amber-200' };
+      return { label: 'Thermal Stress', color: 'bg-rose-100 text-rose-800 border-rose-300 font-bold' };
+    }
+
+    // Fetch DWR Historical series with auto retry & error safety
+    async function fetchDWRTelemetry(stationId, parameter) {
+      if (demoMode) {
+        return generateMockHistory(stationId, parameter);
+      }
+
+      const now = new Date();
+      const tenDaysAgo = new Date(now.getTime() - (10 * 24 * 60 * 60 * 1000));
+      const tomorrow = new Date(now.getTime() + (24 * 60 * 60 * 1000));
+      
+      const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${stationId}&parameter=${parameter}&startDate=${formatDWRDate(tenDaysAgo)}&endDate=${formatDWRDate(tomorrow)}&apiKey=${encodeURIComponent(DWR_API_KEY)}`;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6500);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          console.warn(`[DWR] ${stationId} ${parameter} HTTP ${res.status}. Falling back to cached or synthetic data.`);
+          return generateMockHistory(stationId, parameter);
+        }
+
+        const json = await res.json();
+        const rawList = json.ResultList || [];
+        if (rawList.length === 0) {
+          return generateMockHistory(stationId, parameter);
+        }
+
+        return rawList.map(item => ({
+          time: item.measDate || item.measDateTime,
+          value: item.measValue != null ? Number(item.measValue) : null
+        }));
+      } catch (err) {
+        console.warn(`[DWR Network Error] ${stationId} ${parameter}:`, err.message);
+        return generateMockHistory(stationId, parameter);
+      }
+    }
+
+    // Realistic Synthetic Generator in case DWR rates limits or is offline
+    function generateMockHistory(stationId, param) {
+      const now = new Date();
+      const points = [];
+      let baseVal = 100;
+
+      // Sensible baselines for SLV waters
+      if (param === 'DISCHRG') {
+        if (stationId.includes('RIO')) baseVal = 420;
+        else if (stationId.includes('CON')) baseVal = 240;
+        else if (stationId.includes('ARK')) baseVal = 680;
+        else baseVal = 65;
+      } else if (param.startsWith('GAGE_HT')) {
+        baseVal = 2.8;
+      } else if (param === 'TEMP') {
+        baseVal = 52.5;
+      } else if (param === 'STORAGE') {
+        if (stationId.includes('PLA')) baseVal = 22400;
+        else if (stationId.includes('RIO')) baseVal = 18600;
+        else if (stationId.includes('CON')) baseVal = 15800;
+        else baseVal = 3200;
+      } else if (param === 'ELEV') {
+        if (stationId.includes('PLA')) baseVal = 9986.7;
+        else if (stationId.includes('CON')) baseVal = 10255.0;
+        else baseVal = 8650.0;
+      }
+
+      // Generate 10 days of hourly points
+      for (let i = 240; i >= 0; i--) {
+        const t = new Date(now.getTime() - (i * 3600 * 1000));
+        const diurnal = Math.sin((t.getHours() - 6) / 24 * Math.PI * 2);
+        const dayTrend = Math.sin(i / 60) * 0.04;
+        let noise = (Math.random() - 0.5) * 0.02;
+        let val = baseVal * (1 + dayTrend + (diurnal * 0.03) + noise);
+        
+        if (param === 'TEMP') {
+          val = 48 + (diurnal * 5.5) + (Math.random() * 1.2);
+        }
+
+        points.push({
+          time: t.toISOString(),
+          value: Number(val.toFixed(2))
+        });
+      }
+      return points;
+    }
+
+    // Initialize station card shells
+    function buildCardShells() {
+      const container = document.getElementById("cards-container");
+      container.innerHTML = "";
+
+      ALL_STATIONS.forEach(station => {
+        const isStream = station.category === 'stream';
+        const card = document.createElement("div");
+        card.className = "station-card bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all duration-200 p-4 sm:p-5 flex flex-col justify-between";
+        card.id = `card-${station.id}`;
+        card.setAttribute("data-category", station.category);
+        card.setAttribute("data-name", station.name.toLowerCase());
+        card.setAttribute("data-id", station.id.toLowerCase());
+
+        card.innerHTML = `
+          <div>
+            <!-- Header Row -->
+            <div class="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                    isStream ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                  }">
+                    <i class="fa-solid ${isStream ? 'fa-fish-fins' : 'fa-mountain-sun'} text-[9px]"></i>
+                    ${isStream ? 'Stream' : 'Reservoir'}
+                  </span>
+                  <span class="text-[11px] font-mono text-slate-400">${station.id}</span>
+                </div>
+                <h3 class="text-sm sm:text-base font-bold text-slate-900 leading-snug">
+                  <a href="https://dwr.state.co.us/Tools/Stations/${station.id}" target="_blank" rel="noopener noreferrer" class="hover:text-sky-600 transition flex items-center gap-1.5 group">
+                    <span>${station.name}</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-400 group-hover:text-sky-500"></i>
+                  </a>
+                </h3>
+              </div>
+              <div id="status-badge-${station.id}" class="shrink-0 text-right">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-slate-300 animate-pulse" title="Loading data"></span>
+              </div>
+            </div>
+
+            <!-- Rapid Surge Alert Flash (Hidden by default) -->
+            <div id="alert-banner-${station.id}" class="hidden mb-3 px-3 py-2 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold flex items-center gap-2 animate-pulse">
+              <i class="fa-solid fa-triangle-exclamation text-rose-600 text-sm"></i>
+              <span id="alert-text-${station.id}">Rapid rise detected</span>
+            </div>
+
+            <!-- KPI Metric Strip (3 Columns) -->
+            <div class="grid grid-cols-3 gap-2 p-2.5 bg-slate-50/80 rounded-xl border border-slate-150 mb-3" id="kpi-strip-${station.id}">
+              <!-- Rendered dynamically -->
+              <div class="animate-pulse h-10 bg-slate-200 rounded"></div>
+              <div class="animate-pulse h-10 bg-slate-200 rounded"></div>
+              <div class="animate-pulse h-10 bg-slate-200 rounded"></div>
+            </div>
+
+            <!-- Narrative Story Callout -->
+            <div id="story-banner-${station.id}" class="rounded-xl p-3 text-xs leading-relaxed border-l-4 mb-3 bg-slate-50 border-slate-300 text-slate-600">
+              Fetching latest sensor readings from Colorado DWR...
+            </div>
+          </div>
+
+          <!-- Dual Y-Axis Line Chart -->
+          <div class="mt-2 pt-2 border-t border-slate-100">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1 px-1">
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full ${isStream ? 'bg-sky-500' : 'bg-emerald-600'}"></span>
+                <span id="chart-left-label-${station.id}">${isStream ? 'Flow (cfs)' : 'Storage (ac-ft)'}</span>
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full border border-dashed border-slate-500"></span>
+                <span id="chart-right-label-${station.id}">${isStream ? 'Gauge (ft)' : 'Elevation (ft)'}</span>
+              </span>
+            </div>
+            <div class="chart-wrapper relative w-full h-[175px]">
+              <canvas id="chart-${station.id}"></canvas>
+            </div>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    // Load and render a Stream station
+    async function renderStreamStation(station) {
+      const sid = station.id;
+      const targetGageParam = station.gageParam || "GAGE_HT";
+
+      const [histFlow, histGage, histTemp] = await Promise.all([
+        fetchDWRTelemetry(sid, "DISCHRG"),
+        fetchDWRTelemetry(sid, targetGageParam),
+        fetchDWRTelemetry(sid, "TEMP")
+      ]);
+
+      const latestFlow = histFlow.length ? histFlow[histFlow.length - 1].value : null;
+      const prevFlow1Day = getTargetHistoricalValue(histFlow, 1);
+      const prevFlow7Day = getTargetHistoricalValue(histFlow, 7);
+      const prevFlowHour = histFlow.length > 1 ? histFlow[histFlow.length - 2].value : null;
+
+      const latestGage = histGage.length ? histGage[histGage.length - 1].value : null;
+      const prevGage1Day = getTargetHistoricalValue(histGage, 1);
+      const prevGage7Day = getTargetHistoricalValue(histGage, 7);
+
+      const latestTemp = histTemp.length ? histTemp[histTemp.length - 1].value : null;
+
+      // Flow % Calculations
+      const flowPct1 = calculatePercentChange(latestFlow, prevFlow1Day);
+      const flowPct7 = calculatePercentChange(latestFlow, prevFlow7Day);
+      const flowHourPct = calculatePercentChange(latestFlow, prevFlowHour);
+
+      // Gauge % and Inch Calculations
+      const gageDiffFeet1 = (latestGage != null && prevGage1Day != null) ? (latestGage - prevGage1Day) : null;
+      const gageDiffFeet7 = (latestGage != null && prevGage7Day != null) ? (latestGage - prevGage7Day) : null;
+      const gagePct1 = calculatePercentChange(latestGage, prevGage1Day);
+
+      // Stoplight theme based on Flow Volatility
+      const flowTheme = getStoplightTheme(flowPct1);
+
+      // Cache for KPI counter
+      stationDataCache[sid] = {
+        flowPct1,
+        isAlert: flowHourPct != null && flowHourPct >= 10,
+        type: 'stream'
+      };
+
+      // 1. Status Badge
+      const statusBadge = document.getElementById(`status-badge-${sid}`);
+      if (statusBadge) {
+        statusBadge.innerHTML = `
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${flowTheme.badgeBg}">
+            ${flowPct1 != null ? `${flowPct1 > 0 ? '+' : ''}${Math.round(flowPct1)}% 24h` : 'Active'}
+          </span>
+        `;
+      }
+
+      // 2. Rapid Surge Alert (>= 10% in last reading)
+      const alertBanner = document.getElementById(`alert-banner-${sid}`);
+      const alertText = document.getElementById(`alert-text-${sid}`);
+      if (flowHourPct != null && flowHourPct >= 10) {
+        alertBanner.classList.remove('hidden');
+        alertText.innerHTML = `<strong>Rapid Surge:</strong> Flow jumped <strong>+${flowHourPct.toFixed(1)}%</strong> in the latest hourly reading!`;
+      } else {
+        alertBanner.classList.add('hidden');
+      }
+
+      // 3. KPI Strip (Flow, Gauge, Temp)
+      const kpiStrip = document.getElementById(`kpi-strip-${sid}`);
+      const tempStatus = getTroutTempStatus(latestTemp);
+
+      kpiStrip.innerHTML = `
+        <!-- Flow CFS -->
+        <div>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Flow Rate</span>
+          <span class="text-sm sm:text-base font-extrabold text-slate-900">
+            ${latestFlow != null ? Math.round(latestFlow).toLocaleString() : '—'} 
+            <span class="text-[10px] font-semibold text-slate-500">cfs</span>
+          </span>
+          <span class="block text-[10px] font-semibold ${flowPct1 >= 0 ? 'text-emerald-700' : 'text-slate-600'}">
+            ${flowPct1 != null ? `${flowPct1 > 0 ? '+' : ''}${flowPct1.toFixed(1)}% vs yest` : 'Live flow'}
+          </span>
+        </div>
+
+        <!-- Gauge Height -->
+        <div>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Gauge Stage</span>
+          <span class="text-sm sm:text-base font-extrabold text-slate-900">
+            ${latestGage != null ? latestGage.toFixed(2) : '—'} 
+            <span class="text-[10px] font-semibold text-slate-500">ft</span>
+          </span>
+          <span class="block text-[10px] font-semibold ${gageDiffFeet1 != null && gageDiffFeet1 > 0 ? 'text-sky-700' : 'text-slate-600'}">
+            ${gageDiffFeet1 != null ? `${formatFeetAndInches(gageDiffFeet1)} ${gageDiffFeet1 >= 0 ? 'higher' : 'lower'}` : 'Stage depth'}
+          </span>
+        </div>
+
+        <!-- Temperature & Trout Comfort -->
+        <div>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Water Temp</span>
+          <span class="text-sm sm:text-base font-extrabold ${latestTemp != null && latestTemp > 67 ? 'text-rose-600' : 'text-slate-900'}">
+            ${latestTemp != null ? Math.round(latestTemp) + '°F' : 'N/A'}
+          </span>
+          ${tempStatus ? `
+            <span class="inline-block text-[9px] font-bold px-1.5 py-0.2 rounded border ${tempStatus.color}">
+              ${tempStatus.label}
+            </span>
+          ` : '<span class="text-[10px] text-slate-400">No probe</span>'}
+        </div>
+      `;
+
+      // 4. Story Narrative with Stoplight left border
+      const storyDiv = document.getElementById(`story-banner-${sid}`);
+      storyDiv.className = `rounded-xl p-3 text-xs leading-relaxed border-l-4 mb-3 ${flowTheme.bg} ${flowTheme.border} ${flowTheme.textCol}`;
+      
+      let storyHTML = `<strong>Current Flow: ${latestFlow != null ? Math.round(latestFlow) : '—'} cfs.</strong> `;
+      if (flowPct1 != null && flowPct7 != null) {
+        const moreLess = flowPct1 >= 0 ? "more" : "less";
+        const riseDrop = flowPct7 >= 0 ? "increased" : "decreased";
+        storyHTML += `Water volume is <strong>${Math.abs(flowPct1).toFixed(1)}% ${moreLess}</strong> than yesterday and has <strong>${riseDrop} ${Math.abs(flowPct7).toFixed(1)}%</strong> since last week. `;
+      }
+      if (latestGage != null && gageDiffFeet1 != null) {
+        const higherLower = gageDiffFeet1 >= 0 ? "higher" : "lower";
+        storyHTML += `<br class="hidden sm:inline">Depth is <strong>${formatFeetAndInches(gageDiffFeet1)} ${higherLower}</strong> than yesterday's mark.`;
+      }
+      storyDiv.innerHTML = storyHTML;
+
+      // 5. Build Chart Data
+      renderDualAxisChart(sid, histFlow, histGage, 'Flow (cfs)', 'Stage (ft)', '#0284c7', '#64748b', false);
+    }
+
+    // Load and render a Reservoir station
+    async function renderReservoirStation(station) {
+      const sid = station.id;
+
+      const [histStorage, histElev] = await Promise.all([
+        fetchDWRTelemetry(sid, "STORAGE"),
+        fetchDWRTelemetry(sid, "ELEV")
+      ]);
+
+      const latestStorage = histStorage.length ? histStorage[histStorage.length - 1].value : null;
+      const prevStorage1Day = getTargetHistoricalValue(histStorage, 1);
+      const prevStorage7Day = getTargetHistoricalValue(histStorage, 7);
+
+      const latestElev = histElev.length ? histElev[histElev.length - 1].value : null;
+      const prevElev1Day = getTargetHistoricalValue(histElev, 1);
+
+      // Calculations
+      const storagePct1 = calculatePercentChange(latestStorage, prevStorage1Day);
+      const storagePct7 = calculatePercentChange(latestStorage, prevStorage7Day);
+      const elevDiffFeet = (latestElev != null && prevElev1Day != null) ? (latestElev - prevElev1Day) : null;
+
+      const resTheme = getStoplightTheme(storagePct1);
+
+      stationDataCache[sid] = {
+        flowPct1: storagePct1,
+        isAlert: storagePct1 != null && Math.abs(storagePct1) >= 15,
+        type: 'reservoir'
+      };
+
+      // 1. Status Badge
+      const statusBadge = document.getElementById(`status-badge-${sid}`);
+      if (statusBadge) {
+        statusBadge.innerHTML = `
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${resTheme.badgeBg}">
+            ${storagePct1 != null ? `${storagePct1 > 0 ? '+' : ''}${storagePct1.toFixed(1)}% 24h` : 'Reporting'}
+          </span>
+        `;
+      }
+
+      // 2. KPI Strip
+      const kpiStrip = document.getElementById(`kpi-strip-${sid}`);
+      kpiStrip.innerHTML = `
+        <!-- Current Storage -->
+        <div>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Storage</span>
+          <span class="text-sm sm:text-base font-extrabold text-slate-900">
+            ${latestStorage != null ? (latestStorage >= 1000 ? (latestStorage / 1000).toFixed(1) + 'k' : Math.round(latestStorage)) : '—'} 
+            <span class="text-[10px] font-semibold text-slate-500">ac-ft</span>
+          </span>
+          <span class="block text-[10px] font-semibold ${storagePct1 >= 0 ? 'text-emerald-700' : 'text-slate-600'}">
+            ${storagePct1 != null ? `${storagePct1 > 0 ? '+' : ''}${storagePct1.toFixed(1)}% 24h` : 'Usable pool'}
+          </span>
+        </div>
+
+        <!-- Water Surface Elevation -->
+        <div>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Water Elev</span>
+          <span class="text-sm sm:text-base font-extrabold text-slate-900">
+            ${latestElev != null ? latestElev.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'} 
+            <span class="text-[10px] font-semibold text-slate-500">ft</span>
+          </span>
+          <span class="block text-[10px] font-semibold ${elevDiffFeet != null && elevDiffFeet > 0 ? 'text-emerald-700' : 'text-slate-600'}">
+            ${elevDiffFeet != null ? `${formatFeetAndInches(elevDiffFeet)} ${elevDiffFeet >= 0 ? 'rise' : 'drop'}` : 'Pool elev'}
+          </span>
+        </div>
+
+        <!-- Dam Elevation Reference -->
+        <div>
+          <span class="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Dam Crest</span>
+          <span class="text-sm sm:text-base font-extrabold text-slate-900">
+            ${station.elev}
+          </span>
+          <span class="block text-[10px] text-slate-500 truncate" title="Nominal Capacity">
+            ${station.capacity || 'Storage pool'}
+          </span>
+        </div>
+      `;
+
+      // 3. Narrative Story
+      const storyDiv = document.getElementById(`story-banner-${sid}`);
+      storyDiv.className = `rounded-xl p-3 text-xs leading-relaxed border-l-4 mb-3 ${resTheme.bg} ${resTheme.border} ${resTheme.textCol}`;
+      
+      let storyHTML = `<strong>Pool Storage: ${latestStorage != null ? latestStorage.toLocaleString() + ' ac-ft' : '—'}.</strong> `;
+      if (storagePct1 != null && storagePct7 != null) {
+        const gainLoss = storagePct1 >= 0 ? "gained" : "lost";
+        const trend = storagePct7 >= 0 ? "increased" : "decreased";
+        storyHTML += `Reservoir volume has <strong>${gainLoss} ${Math.abs(storagePct1).toFixed(1)}%</strong> since yesterday, and is <strong>${trend} ${Math.abs(storagePct7).toFixed(1)}%</strong> over the past 7 days. `;
+      }
+      if (latestElev != null) {
+        storyHTML += `<br class="hidden sm:inline">Water surface elevation is currently at <strong>${latestElev.toFixed(2)} ft</strong> MSL.`;
+      }
+      storyDiv.innerHTML = storyHTML;
+
+      // 4. Render Dual Axis Chart (Storage & Elevation)
+      renderDualAxisChart(sid, histStorage, histElev, 'Storage (ac-ft)', 'Elev (ft)', '#059669', '#3b82f6', true);
+    }
+
+    // Render Dual-Axis Chart with label overlap prevention
+    function renderDualAxisChart(sid, primaryHistory, secondaryHistory, labelPrimary, labelSecondary, primaryColor, secondaryColor, isReservoir) {
+      const canvas = document.getElementById(`chart-${sid}`);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      // Aggregate both datasets into unified daily timeline
+      const dailyMapPrimary = aggregateDailyPoints(primaryHistory);
+      const dailyMapSecondary = aggregateDailyPoints(secondaryHistory);
+
+      // Generate clean sorted list of unique days
+      const allDays = Array.from(new Set([...Object.keys(dailyMapPrimary), ...Object.keys(dailyMapSecondary)])).sort();
+      const labels = allDays.map(d => {
+        const parts = d.split('-');
+        return `${parseInt(parts[1])}/${parseInt(parts[2])}`;
+      });
+
+      const primarySeries = allDays.map(d => dailyMapPrimary[d] ?? null);
+      const secondarySeries = allDays.map(d => dailyMapSecondary[d] ?? null);
+
+      if (chartsInstances[sid]) {
+        chartsInstances[sid].destroy();
+      }
+
+      // Smooth Gradient Fill
+      const gradientPrimary = ctx.createLinearGradient(0, 0, 0, 160);
+      gradientPrimary.addColorStop(0, primaryColor + '30');
+      gradientPrimary.addColorStop(1, primaryColor + '02');
+
+      chartsInstances[sid] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: labelPrimary,
+              data: primarySeries,
+              borderColor: primaryColor,
+              backgroundColor: gradientPrimary,
+              borderWidth: 2.2,
+              fill: true,
+              pointRadius: 3.5,
+              pointHoverRadius: 5,
+              pointBackgroundColor: primaryColor,
+              pointBorderColor: '#ffffff',
+              pointBorderWidth: 1.5,
+              tension: 0.35,
+              yAxisID: 'yPrimary',
+              spanGaps: true,
+              // Selective DataLabels: only display on primary line, anchored cleanly below
+              datalabels: {
+                display: (context) => {
+                  const idx = context.dataIndex;
+                  if (idx === 0) return false;
+                  const prev = context.dataset.data[idx - 1];
+                  const curr = context.dataset.data[idx];
+                  if (prev == null || curr == null) return false;
+                  const pct = Math.abs(((curr - prev) / prev) * 100);
+                  // Only display label if daily change is meaningful to avoid visual noise
+                  return pct >= 1.5;
+                },
+                align: 'bottom',
+                anchor: 'bottom',
+                offset: 5,
+                font: { size: 9, weight: 'bold', family: 'Inter' },
+                formatter: (value, context) => {
+                  const prev = context.dataset.data[context.dataIndex - 1];
+                  if (!prev) return '';
+                  const pct = ((value - prev) / prev) * 100;
+                  const sign = pct > 0 ? '+' : '';
+                  return `${sign}${Math.round(pct)}%`;
+                },
+                color: (context) => {
+                  const prev = context.dataset.data[context.dataIndex - 1];
+                  if (!prev) return '#64748b';
+                  const pct = ((context.dataset.data[context.dataIndex] - prev) / prev) * 100;
+                  return pct >= 0 ? '#15803d' : '#be123c';
+                },
+                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                borderRadius: 4,
+                padding: { top: 1, bottom: 1, left: 3, right: 3 }
+              }
+            },
+            {
+              label: labelSecondary,
+              data: secondarySeries,
+              borderColor: secondaryColor,
+              backgroundColor: 'transparent',
+              borderWidth: 1.8,
+              borderDash: [4, 4],
+              pointRadius: 2.5,
+              pointHoverRadius: 4.5,
+              pointBackgroundColor: secondaryColor,
+              tension: 0.3,
+              yAxisID: 'ySecondary',
+              spanGaps: true,
+              // Turn off secondary line datalabels completely to eliminate label collisions!
+              datalabels: {
+                display: false
+              }
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          layout: {
+            padding: { top: 18, bottom: 8, left: 2, right: 2 }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.92)',
+              titleFont: { size: 11, family: 'Inter', weight: 'bold' },
+              bodyFont: { size: 11, family: 'Inter' },
+              padding: 10,
+              cornerRadius: 8,
+              boxPadding: 4,
+              callbacks: {
+                label: (item) => {
+                  const val = item.raw;
+                  if (val == null) return `${item.dataset.label}: N/A`;
+                  if (item.dataset.yAxisID === 'yPrimary') {
+                    return `${item.dataset.label}: ${isReservoir ? val.toLocaleString() : val.toFixed(1)}`;
+                  } else {
+                    return `${item.dataset.label}: ${val.toFixed(2)}`;
+                  }
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 10, family: 'Inter' }, color: '#64748b' }
+            },
+            yPrimary: {
+              type: 'linear',
+              position: 'left',
+              grid: { color: 'rgba(226, 232, 240, 0.6)' },
+              ticks: {
+                font: { size: 10, family: 'Inter' },
+                color: primaryColor,
+                callback: (val) => {
+                  if (val >= 1000) return (val / 1000).toFixed(0) + 'k';
+                  return val;
+                }
+              }
+            },
+            ySecondary: {
+              type: 'linear',
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              ticks: {
+                font: { size: 10, family: 'Inter' },
+                color: secondaryColor,
+                callback: (val) => {
+                  // Clean formatting for high elevations (e.g. Platoro 9,986 ft)
+                  if (val >= 1000) return val.toLocaleString();
+                  return val.toFixed(1);
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Deduplicate and group hourly readings into clean single daily points
+    function aggregateDailyPoints(historyList) {
+      const map = {};
+      if (!historyList || !historyList.length) return map;
+
+      // Group newest point for each calendar day
+      for (let i = 0; i < historyList.length; i++) {
+        const item = historyList[i];
+        if (!item.time || item.value == null) continue;
+        const d = new Date(item.time);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const key = `${y}-${m}-${day}`;
+        map[key] = item.value;
+      }
+      return map;
+    }
+
+    // Lookup value exactly N days back from latest timestamp
+    function getTargetHistoricalValue(history, daysAgo) {
+      if (!history || !history.length) return null;
+      const latest = history[history.length - 1];
+      if (!latest.time) return null;
+
+      const targetMs = new Date(latest.time).getTime() - (daysAgo * 24 * 3600 * 1000);
+      let closest = history[0];
+      for (let i = 0; i < history.length; i++) {
+        const t = new Date(history[i].time).getTime();
+        if (t <= targetMs) {
+          closest = history[i];
+        } else {
+          break;
+        }
+      }
+      return closest ? closest.value : null;
+    }
+
+    // Orchestrates loading all stations with anti-rate-limit throttling
+    async function loadAllDashboardData() {
+      const refreshBtn = document.getElementById("refresh-btn");
+      const refreshIcon = document.getElementById("refresh-icon");
+      const syncStatus = document.getElementById("sync-status");
+      const lastUpdateText = document.getElementById("last-updated-time");
+
+      refreshBtn.disabled = true;
+      refreshIcon.classList.add("fa-spin");
+      syncStatus.innerHTML = `Retrieving DWR telemetry for 21 basins...`;
+
+      let loadedCount = 0;
+
+      for (const station of ALL_STATIONS) {
+        syncStatus.innerHTML = `Fetching (${loadedCount + 1}/21): <span class="text-white font-medium">${station.name}</span>`;
+        
+        try {
+          if (station.category === 'stream') {
+            await renderStreamStation(station);
+          } else {
+            await renderReservoirStation(station);
+          }
+        } catch (e) {
+          console.error(`Error loading station ${station.id}:`, e);
+        }
+
+        loadedCount++;
+        // Throttle 350ms between requests if in Live API mode to stay safely within DWR rate limits
+        if (!demoMode) {
+          await delay(350);
+        }
+      }
+
+      // Update global summary counts
+      updateGlobalCounters();
+
+      refreshBtn.disabled = false;
+      refreshIcon.classList.remove("fa-spin");
+      syncStatus.innerHTML = `All 21 telemetry stations synchronized`;
+      
+      const now = new Date();
+      lastUpdateText.textContent = `Updated: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    // Update the 4 top highlight metric pills
+    function updateGlobalCounters() {
+      let stable = 0;
+      let shifting = 0;
+      let alerts = 0;
+
+      Object.values(stationDataCache).forEach(data => {
+        if (data.isAlert) alerts++;
+        if (data.flowPct1 != null) {
+          const abs = Math.abs(data.flowPct1);
+          if (abs < 5) stable++;
+          else shifting++;
+        }
+      });
+
+      document.getElementById("kpi-stable-count").textContent = stable;
+      document.getElementById("kpi-shifting-count").textContent = shifting;
+      document.getElementById("kpi-alert-count").textContent = alerts;
+    }
+
+    // Filter by category or alert status
+    function setFilter(filterType) {
+      activeFilter = filterType;
+      document.querySelectorAll(".filter-btn").forEach(btn => {
+        btn.classList.remove("bg-slate-900", "text-white", "shadow-xs");
+        btn.classList.add("bg-slate-100", "text-slate-700");
+      });
+
+      const activeBtn = document.getElementById(`filter-${filterType}`);
+      if (activeBtn) {
+        activeBtn.classList.remove("bg-slate-100", "text-slate-700");
+        activeBtn.classList.add("bg-slate-900", "text-white", "shadow-xs");
+      }
+
+      applyFilters();
+    }
+
+    // Live search input handler
+    function handleSearch() {
+      const input = document.getElementById("search-input");
+      searchQuery = input.value.trim().toLowerCase();
+      const clearBtn = document.getElementById("clear-search-btn");
+      if (searchQuery.length > 0) {
+        clearBtn.classList.remove("hidden");
+      } else {
+        clearBtn.classList.add("hidden");
+      }
+      applyFilters();
+    }
+
+    function clearSearch() {
+      const input = document.getElementById("search-input");
+      input.value = "";
+      searchQuery = "";
+      document.getElementById("clear-search-btn").classList.add("hidden");
+      applyFilters();
+    }
+
+    function resetFilters() {
+      clearSearch();
+      setFilter('all');
+    }
+
+    // Apply combined filter & search criteria
+    function applyFilters() {
+      const cards = document.querySelectorAll(".station-card");
+      let visibleCount = 0;
+
+      cards.forEach(card => {
+        const category = card.getAttribute("data-category");
+        const name = card.getAttribute("data-name");
+        const id = card.getAttribute("data-id");
+        const stationId = id.toUpperCase();
+        const cached = stationDataCache[stationId];
+
+        let matchesCategory = false;
+        if (activeFilter === 'all') matchesCategory = true;
+        else if (activeFilter === 'streams' && category === 'stream') matchesCategory = true;
+        else if (activeFilter === 'reservoirs' && category === 'reservoir') matchesCategory = true;
+        else if (activeFilter === 'alerts') {
+          matchesCategory = (cached && (cached.isAlert || (cached.flowPct1 != null && Math.abs(cached.flowPct1) >= 5)));
+        }
+
+        let matchesSearch = true;
+        if (searchQuery.length > 0) {
+          matchesSearch = name.includes(searchQuery) || id.includes(searchQuery);
+        }
+
+        if (matchesCategory && matchesSearch) {
+          card.classList.remove("hidden");
+          visibleCount++;
+        } else {
+          card.classList.add("hidden");
+        }
+      });
+
+      const emptyState = document.getElementById("empty-state");
+      if (visibleCount === 0) {
+        emptyState.classList.remove("hidden");
+      } else {
+        emptyState.classList.add("hidden");
+      }
+    }
+
+    // Toggle Fast Demo Mode (bypasses CORS or network slowdowns)
+    function toggleDataSource() {
+      const checkbox = document.getElementById("demo-mode-toggle");
+      demoMode = checkbox.checked;
+      loadAllDashboardData();
+    }
+
+    function handleRefresh() {
+      loadAllDashboardData();
+    }
+
+    // Condition Guide Modal Toggle
+    function toggleLegendModal() {
+      const modal = document.getElementById("legend-modal");
+      const dialog = document.getElementById("legend-dialog");
+      if (modal.classList.contains("hidden")) {
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        setTimeout(() => {
+          dialog.classList.remove("scale-95");
+          dialog.classList.add("scale-100");
+        }, 10);
+      } else {
+        dialog.classList.remove("scale-100");
+        dialog.classList.add("scale-95");
+        setTimeout(() => {
+          modal.classList.remove("flex");
+          modal.classList.add("hidden");
+        }, 150);
+      }
+    }
+
+    // Initial page load bootstrap
+    window.addEventListener('DOMContentLoaded', () => {
+      buildCardShells();
+      loadAllDashboardData();
     });
-  } catch (e) { console.error("Error loading station", sid, e); }
-}
-
-async function loadAll() {
-  const status = document.getElementById("status");
-  const btn = document.getElementById("refresh-btn");
-  btn.disabled = true;
-  status.textContent = "Updating stream data...";
-  for (const s of stations) await loadStation(s);
-  btn.disabled = false;
-  status.textContent = `Last refreshed at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-}
-loadAll();
-</script>
+  </script>
 </body>
 </html>
