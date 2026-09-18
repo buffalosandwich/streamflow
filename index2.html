@@ -1,77 +1,406 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>San Luis Valley Water Dashboard</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Chart.js & Datalabels -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    body { font-family: 'Plus Jakarta Sans', sans-serif; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLV Water Dashboard | Streams & Reservoirs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<style>
+  :root {
+    --bg-page: #f8fafc;
+    --card-bg: #ffffff;
+    --border-color: #e2e8f0;
+    --text-dark: #0f172a;
+    --text-muted: #64748b;
+    --text-subtle: #94a3b8;
+    --blue-flow: #0284c7;
+    --green-stable: #16a34a;
+    --yellow-shift: #d97706;
+    --red-alert: #dc2626;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-dark);
+    padding: 16px;
+    line-height: 1.45;
+  }
+
+  .container {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  /* Header & Controls */
+  header {
+    margin-bottom: 20px;
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text-dark);
+  }
+  .controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 14px;
+  }
+  .filter-group {
+    display: inline-flex;
+    background: #e2e8f0;
+    padding: 3px;
+    border-radius: 9999px;
+    gap: 2px;
+  }
+  .filter-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn.active {
+    background: #ffffff;
+    color: var(--text-dark);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .btn-refresh {
+    background: #0f172a;
+    color: #ffffff;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .btn-refresh:active { transform: scale(0.97); }
+  .btn-refresh:disabled { background: var(--text-subtle); cursor: not-allowed; }
+  #status {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  /* Card Layout */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .tag-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .pill-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .pill-stream {
+    background: #f0f9ff;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+  }
+  .pill-reservoir {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+  }
+  .station-id {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-subtle);
+    letter-spacing: 0.03em;
+  }
+  .station-crest {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-subtle);
+  }
+
+  .card-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    letter-spacing: -0.01em;
+  }
+  .card-title a {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .card-title a:hover {
+    color: var(--blue-flow);
+  }
+  .ext-icon {
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-subtle);
+  }
+
+  /* 24h Change Pill */
+  .badge-24h {
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .badge-green { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+  .badge-yellow { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+  .badge-red { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+
+  /* 3-Column KPI Stat Strip */
+  .kpi-container {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.25fr;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .kpi-col { display: flex; flex-direction: column; }
+  .kpi-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+  .kpi-val {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    line-height: 1.2;
+  }
+  .kpi-unit {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .kpi-sub {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .temp-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .badge-prime {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+  }
+  .badge-warm {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fde68a;
+  }
+  .badge-cold {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+  }
+
+  /* Condition Story Box */
+  .story-box {
+    font-size: 0.84rem;
+    line-height: 1.5;
+    padding: 11px 14px;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    border-left: 5px solid transparent;
+  }
+  .story-green { background: #f0fdf4; color: #0f172a; border-left-color: #22c55e; }
+  .story-yellow { background: #fffbeb; color: #0f172a; border-left-color: #f59e0b; }
+  .story-red { background: #fef2f2; color: #0f172a; border-left-color: #ef4444; }
+
+  /* Chart Layout & Legend */
+  .chart-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-dot-flow {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--blue-flow);
+  }
+  .legend-dot-gage {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: 1.5px dashed #64748b;
+  }
+  .chart-wrapper {
+    position: relative;
+    height: 185px;
+    width: 100%;
+  }
+
+  /* Legend Container at Bottom */
+  #legend-container {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    padding: 18px 20px;
+    margin-top: 24px;
+  }
+  #legend-container h2 {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--text-dark);
+    margin-bottom: 10px;
+  }
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px;
+  }
+  .legend-box {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+  .legend-circle {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    shrink-0;
+    margin-top: 2px;
+  }
+  .bg-g { background: #22c55e; }
+  .bg-y { background: #f59e0b; }
+  .bg-r { background: #ef4444; }
+</style>
 </head>
-<body class="bg-slate-50 text-slate-900 antialiased min-h-screen p-3 sm:p-6">
+<body>
 
-  <div class="max-w-4xl mx-auto">
-    <!-- Header -->
-    <header class="mb-6">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+<div class="container">
+  <header>
+    <div class="header-top">
+      <h1>San Luis Valley Basin Monitor</h1>
+      <button id="refresh-btn" class="btn-refresh" onclick="loadAll()">Refresh Now</button>
+    </div>
+    <div class="controls-bar">
+      <div class="filter-group">
+        <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+        <button class="filter-btn" onclick="setFilter('stream', this)">Streams (13)</button>
+        <button class="filter-btn" onclick="setFilter('reservoir', this)">Reservoirs (8)</button>
+      </div>
+      <div id="status">Connecting to live DWR sensors...</div>
+    </div>
+  </header>
+
+  <main id="stations-list"></main>
+
+  <section id="legend-container">
+    <h2>Understanding River & Pool Conditions</h2>
+    <div class="legend-grid">
+      <div class="legend-box" style="background:#f0fdf4; border:1px solid #bbf7d0;">
+        <span class="legend-circle bg-g"></span>
         <div>
-          <h1 class="text-2xl font-extrabold tracking-tight text-slate-900">San Luis Valley Basin Monitor</h1>
-          <p class="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Real-time telemetry, live temperatures, and reservoir storage</p>
-        </div>
-        <button id="refresh-btn" onclick="loadAll()" class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition-all disabled:bg-slate-400 disabled:scale-100 cursor-pointer">
-          <svg id="refresh-spinner" class="w-4 h-4 hidden animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-          <span id="refresh-text">Refresh Data</span>
-        </button>
-      </div>
-
-      <!-- Filters & Status -->
-      <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
-        <div class="inline-flex p-1 bg-slate-200/60 rounded-xl text-xs font-semibold">
-          <button class="filter-pill px-3 py-1.5 rounded-lg transition-all bg-white text-slate-900 shadow-sm" onclick="setFilter('all', this)">All Stations</button>
-          <button class="filter-pill px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900" onclick="setFilter('stream', this)">Streams (13)</button>
-          <button class="filter-pill px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900" onclick="setFilter('reservoir', this)">Reservoirs (8)</button>
-        </div>
-        <div id="status" class="text-xs font-medium text-slate-500">Initializing sensors...</div>
-      </div>
-    </header>
-
-    <!-- Stations Feed -->
-    <main id="stations-feed" class="space-y-5"></main>
-
-    <!-- Dashboard Legend -->
-    <footer class="mt-8 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
-      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Understanding River & Pool Conditions</h2>
-      <div class="grid sm:grid-cols-3 gap-3 text-xs leading-relaxed">
-        <div class="flex gap-2.5 p-3 rounded-xl bg-emerald-50/70 border border-emerald-100">
-          <span class="w-3 h-3 rounded-full bg-emerald-500 shrink-0 mt-0.5"></span>
-          <div>
-            <strong class="text-emerald-900 block font-bold">Stable (&lt; 5% shift)</strong>
-            <span class="text-emerald-800">Steady river flow or pool level. Predictable wading, clear visibility, and minimal floating debris.</span>
-          </div>
-        </div>
-        <div class="flex gap-2.5 p-3 rounded-xl bg-amber-50/70 border border-amber-100">
-          <span class="w-3 h-3 rounded-full bg-amber-500 shrink-0 mt-0.5"></span>
-          <div>
-            <strong class="text-amber-900 block font-bold">Shifting (5% - 15% shift)</strong>
-            <span class="text-amber-800">Moderate rise or drop. Fish move toward banks; monitor footing while wading.</span>
-          </div>
-        </div>
-        <div class="flex gap-2.5 p-3 rounded-xl bg-rose-50/70 border border-rose-100">
-          <span class="w-3 h-3 rounded-full bg-rose-500 shrink-0 mt-0.5"></span>
-          <div>
-            <strong class="text-rose-900 block font-bold">Volatile (&gt; 15% shift)</strong>
-            <span class="text-rose-800">Surging flows or rapid drawdowns. Murky water, hazardous wading, and heavy drift.</span>
-          </div>
+          <strong style="color:#166534; display:block; margin-bottom:2px;">Green (&lt; 5% change)</strong>
+          Stable streamflow or pool. Predictable wading conditions, clear water, and safe fishing.
         </div>
       </div>
-    </footer>
-  </div>
+      <div class="legend-box" style="background:#fffbeb; border:1px solid #fde68a;">
+        <span class="legend-circle bg-y"></span>
+        <div>
+          <strong style="color:#92400e; display:block; margin-bottom:2px;">Yellow (5% - 15% change)</strong>
+          Shifting conditions. Flow or storage is transitioning; monitor footing and bank water.
+        </div>
+      </div>
+      <div class="legend-box" style="background:#fef2f2; border:1px solid #fecaca;">
+        <span class="legend-circle bg-r"></span>
+        <div>
+          <strong style="color:#991b1b; display:block; margin-bottom:2px;">Red (&gt; 15% change)</strong>
+          Volatile water. Rapid rise or drawdown; expect murkiness, debris drift, and hazardous wading.
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
 
 <script>
 Chart.register(ChartDataLabels);
@@ -108,12 +437,8 @@ const stations = [
 let activeFilter = "all";
 function setFilter(type, btn) {
   activeFilter = type;
-  document.querySelectorAll('.filter-pill').forEach(el => {
-    el.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
-    el.classList.add('text-slate-600');
-  });
-  btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
-  btn.classList.remove('text-slate-600');
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
 
   stations.forEach(s => {
     const card = document.getElementById(`card-${s.id}`);
@@ -137,7 +462,7 @@ function formatInches(feet) {
   return parts.join(" ");
 }
 
-// Live 15-minute instantaneous reading
+// Live 15-minute telemetry
 async function fetchLiveReading(sid, param) {
   const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrystationreading?format=json&abbrev=${sid}&parameter=${param}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
@@ -166,77 +491,74 @@ async function fetchDWRHistory(sid, param) {
   } catch(e) { return []; }
 }
 
-function getTempBadge(tempF) {
-  if (tempF == null) return '';
-  const rounded = Math.round(tempF);
-  if (rounded >= 50 && rounded <= 65) {
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Prime Feeding</span>`;
+function getTempChip(tempF) {
+  if (tempF == null) return { val: '—', badge: '' };
+  const r = Math.round(tempF);
+  if (r >= 50 && r <= 65) {
+    return { val: `${r}°F`, badge: `<span class="badge-prime">Prime Feeding</span>` };
+  } else if (r > 65 && r < 70) {
+    return { val: `${r}°F`, badge: `<span class="badge-warm">Warm Water</span>` };
   }
-  if (rounded > 65 && rounded < 70) {
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Warm Water</span>`;
-  }
-  if (rounded >= 70) {
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">Hoot Owl</span>`;
-  }
-  return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">Slow Cold</span>`;
+  return { val: `${r}°F`, badge: `<span class="badge-cold">Slow Cold</span>` };
 }
 
-// Generate Station Cards
-const container = document.getElementById("stations-feed");
+// Build DOM Cards
+const container = document.getElementById("stations-list");
 stations.forEach(s => {
   const card = document.createElement("div");
-  card.className = "card bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 transition-all";
+  card.className = "card";
   card.id = `card-${s.id}`;
 
   const isStream = s.type === "stream";
-  const typeBadge = isStream 
-    ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-sky-50 text-sky-700 border border-sky-200">➔ Stream</span>`
-    : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200">⛯ Reservoir</span>`;
+  const pillClass = isStream ? "pill-stream" : "pill-reservoir";
+  const pillText = isStream ? "➔ STREAM" : "⛯ RESERVOIR";
+  const crestText = s.elev ? `<span class="station-crest">· Crest ${s.elev}</span>` : "";
+  const paramLink = isStream ? "DISCHRG,GAGE_HT,WATTEMP" : "STORAGE,ELEV";
 
   card.innerHTML = `
-    <!-- Top Metadata Header -->
-    <div class="flex items-start justify-between gap-2 mb-3">
+    <div class="card-top">
       <div>
-        <div class="flex items-center gap-2 mb-1.5">
-          ${typeBadge}
-          <span class="text-xs font-semibold text-slate-400 tracking-wider">${s.id}</span>
-          ${s.elev ? `<span class="text-xs text-slate-400 font-medium">· Crest ${s.elev}</span>` : ''}
+        <div class="tag-row">
+          <span class="pill-type ${pillClass}">${pillText}</span>
+          <span class="station-id">${s.id}</span>
+          ${crestText}
         </div>
-        <h2 class="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-          <a href="https://dwr.state.co.us/Tools/Stations/${s.id}?params=${isStream ? 'DISCHRG,GAGE_HT,WATTEMP' : 'STORAGE,ELEV'}" target="_blank" class="hover:text-sky-600 transition-colors">
+        <div class="card-title">
+          <a href="https://dwr.state.co.us/Tools/Stations/${s.id}?params=${paramLink}" target="_blank">
             ${s.name}
+            <svg class="ext-icon" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"></path></svg>
           </a>
-          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"></path></svg>
-        </h2>
+        </div>
       </div>
       <div id="badge-pill-${s.id}">
-        <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">...</span>
+        <span class="badge-24h" style="background:#f1f5f9; color:#94a3b8;">...</span>
       </div>
     </div>
 
-    <!-- 3-Column KPI Stat Strip -->
-    <div class="bg-slate-50/90 border border-slate-100 rounded-xl p-3 sm:p-4 grid grid-cols-3 gap-2 sm:gap-4 mb-3.5" id="kpis-${s.id}">
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">${isStream ? 'Flow Rate' : 'Storage'}</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">—</div>
-        <div class="text-[11px] font-semibold text-slate-400 mt-0.5">Loading...</div>
+    <div class="kpi-container" id="kpis-${s.id}">
+      <div class="kpi-col">
+        <span class="kpi-title">${isStream ? 'Flow Rate' : 'Storage'}</span>
+        <span class="kpi-val">—</span>
+        <span class="kpi-sub">Loading...</span>
       </div>
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">${isStream ? 'Gauge Stage' : 'Pool Level'}</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">—</div>
-        <div class="text-[11px] font-semibold text-slate-400 mt-0.5">Loading...</div>
+      <div class="kpi-col">
+        <span class="kpi-title">${isStream ? 'Gauge Stage' : 'Pool Level'}</span>
+        <span class="kpi-val">—</span>
+        <span class="kpi-sub">Loading...</span>
       </div>
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">${isStream ? 'Water Temp' : 'Dam Crest'}</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">—</div>
+      <div class="kpi-col">
+        <span class="kpi-title">${isStream ? 'Water Temp' : 'Dam Crest'}</span>
+        <span class="kpi-val">—</span>
       </div>
     </div>
 
-    <!-- Condition Story Banner -->
-    <div id="story-${s.id}" class="p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm font-medium border-l-4 leading-relaxed mb-3.5" style="display:none;"></div>
+    <div class="story-box" id="story-${s.id}" style="display:none;"></div>
 
-    <!-- Chart -->
-    <div class="chart-wrapper relative h-48 w-full">
+    <div class="chart-header">
+      <div class="chart-legend-item"><span class="legend-dot-flow"></span> ${isStream ? 'Flow (cfs)' : 'Storage (ac-ft)'}</div>
+      <div class="chart-legend-item"><span class="legend-dot-gage"></span> ${isStream ? 'Gauge (ft)' : 'Elevation (ft)'}</div>
+    </div>
+    <div class="chart-wrapper">
       <canvas id="chart-${s.id}"></canvas>
     </div>
   `;
@@ -250,7 +572,7 @@ async function loadStation(s) {
   const primaryParam = isStream ? "DISCHRG" : "STORAGE";
   const secondaryParam = isStream ? (s.gageParam || "GAGE_HT") : "ELEV";
 
-  // WATTEMP first for streams, fallback to TEMP
+  // WATTEMP live telemetry with fallback to TEMP
   let liveTempPromise = Promise.resolve(null);
   if (isStream) {
     liveTempPromise = fetchLiveReading(s.id, "WATTEMP").then(r => r ? r : fetchLiveReading(s.id, "TEMP"));
@@ -267,7 +589,7 @@ async function loadStation(s) {
   const valPrimary = livePrimary ? livePrimary.value : (histPrimary.length ? histPrimary[histPrimary.length - 1].value : null);
   const valSecondary = liveSecondary ? liveSecondary.value : (histSecondary.length ? histSecondary[histSecondary.length - 1].value : null);
 
-  // Shifts
+  // 24-hour and 7-day shifts
   let pct24 = null, pct7d = null;
   if (histPrimary.length >= 2 && valPrimary != null) {
     const prev24 = histPrimary.length > 24 ? histPrimary[histPrimary.length - 25].value : histPrimary[0].value;
@@ -282,75 +604,74 @@ async function loadStation(s) {
     if (prev24Sec != null) diff24Sec = valSecondary - prev24Sec;
   }
 
-  // Top Right Header Pill Badge
+  // Top Right Badge
   const badgeEl = document.getElementById(`badge-pill-${s.id}`);
   if (pct24 != null) {
     const absPct = Math.round(Math.abs(pct24));
     const sign = pct24 >= 0 ? '+' : '-';
-    let pillStyle = "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (absPct > 15) pillStyle = "bg-rose-50 text-rose-700 border-rose-200";
-    else if (absPct >= 5) pillStyle = "bg-amber-50 text-amber-700 border-amber-200";
-    badgeEl.innerHTML = `<span class="px-2.5 py-1 rounded-full text-xs font-bold border ${pillStyle}">${sign}${absPct}% 24h</span>`;
+    let bClass = "badge-green";
+    if (absPct > 15) bClass = "badge-red";
+    else if (absPct >= 5) bClass = "badge-yellow";
+    badgeEl.innerHTML = `<span class="badge-24h ${bClass}">${sign}${absPct}% 24h</span>`;
   }
 
-  // 3-Column KPI Block Population
+  // KPI Strip
   const kpiEl = document.getElementById(`kpis-${s.id}`);
   if (isStream) {
-    const tempF = liveTemp ? liveTemp.value : null;
-    const tempBadge = getTempBadge(tempF);
-    const flowSub = pct24 != null ? `<span class="${pct24 >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pct24 >= 0 ? '+' : ''}${pct24.toFixed(1)}% vs yest</span>` : 'Current';
-    const stageSub = diff24Sec != null ? `${formatInches(diff24Sec)} ${diff24Sec >= 0 ? 'higher' : 'lower'}` : 'Current';
+    const tempInfo = getTempChip(liveTemp ? liveTemp.value : null);
+    const flowSub = pct24 != null ? `${pct24 >= 0 ? '+' : ''}${pct24.toFixed(1)}% vs yest` : "Current";
+    const stageSub = diff24Sec != null ? `${formatInches(diff24Sec)} ${diff24Sec >= 0 ? 'higher' : 'lower'}` : "Current";
 
     kpiEl.innerHTML = `
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Flow Rate</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valPrimary != null ? Math.round(valPrimary) : '—'} <span class="text-xs font-semibold text-slate-500">cfs</span></div>
-        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${flowSub}</div>
+      <div class="kpi-col">
+        <span class="kpi-title">FLOW RATE</span>
+        <span class="kpi-val">${valPrimary != null ? Math.round(valPrimary) : '—'} <span class="kpi-unit">cfs</span></span>
+        <span class="kpi-sub">${flowSub}</span>
       </div>
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Gauge Stage</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valSecondary != null ? valSecondary.toFixed(2) : '—'} <span class="text-xs font-semibold text-slate-500">ft</span></div>
-        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${stageSub}</div>
+      <div class="kpi-col">
+        <span class="kpi-title">GAUGE STAGE</span>
+        <span class="kpi-val">${valSecondary != null ? valSecondary.toFixed(2) : '—'} <span class="kpi-unit">ft</span></span>
+        <span class="kpi-sub">${stageSub}</span>
       </div>
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Water Temp</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-1.5 flex-wrap">
-          ${tempF != null ? Math.round(tempF) + '°F' : '—'}
-          ${tempBadge}
+      <div class="kpi-col">
+        <span class="kpi-title">WATER TEMP</span>
+        <div class="temp-row">
+          <span class="kpi-val">${tempInfo.val}</span>
+          ${tempInfo.badge}
         </div>
       </div>
     `;
   } else {
-    const storSub = pct24 != null ? `<span class="${pct24 >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pct24 >= 0 ? '+' : ''}${pct24.toFixed(1)}% vs yest</span>` : 'Current';
-    const elevSub = diff24Sec != null ? `${formatInches(diff24Sec)} ${diff24Sec >= 0 ? 'higher' : 'lower'}` : 'Pool Level';
+    const storSub = pct24 != null ? `${pct24 >= 0 ? '+' : ''}${pct24.toFixed(1)}% vs yest` : "Current";
+    const elevSub = diff24Sec != null ? `${formatInches(diff24Sec)} ${diff24Sec >= 0 ? 'higher' : 'lower'}` : "Pool Level";
 
     kpiEl.innerHTML = `
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Storage</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valPrimary != null ? Math.round(valPrimary).toLocaleString() : '—'} <span class="text-xs font-semibold text-slate-500">ac-ft</span></div>
-        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${storSub}</div>
+      <div class="kpi-col">
+        <span class="kpi-title">STORAGE</span>
+        <span class="kpi-val">${valPrimary != null ? Math.round(valPrimary).toLocaleString() : '—'} <span class="kpi-unit">ac-ft</span></span>
+        <span class="kpi-sub">${storSub}</span>
       </div>
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Pool Elevation</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valSecondary != null ? valSecondary.toFixed(1) : '—'} <span class="text-xs font-semibold text-slate-500">ft</span></div>
-        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${elevSub}</div>
+      <div class="kpi-col">
+        <span class="kpi-title">POOL ELEVATION</span>
+        <span class="kpi-val">${valSecondary != null ? valSecondary.toFixed(1) : '—'} <span class="kpi-unit">ft</span></span>
+        <span class="kpi-sub">${elevSub}</span>
       </div>
-      <div>
-        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Dam Crest</div>
-        <div class="text-base sm:text-lg font-extrabold text-slate-900">${s.elev || '—'}</div>
+      <div class="kpi-col">
+        <span class="kpi-title">DAM CREST</span>
+        <span class="kpi-val" style="font-size:1.05rem;">${s.elev || '—'}</span>
       </div>
     `;
   }
 
-  // Story Banner
+  // Story Box
   const storyEl = document.getElementById(`story-${s.id}`);
   if (pct24 != null) {
     const absPct = Math.round(Math.abs(pct24));
-    let theme = "bg-emerald-50 text-emerald-900 border-emerald-500";
-    if (absPct > 15) theme = "bg-rose-50 text-rose-900 border-rose-500";
-    else if (absPct >= 5) theme = "bg-amber-50 text-amber-900 border-amber-500";
+    let sClass = "story-green";
+    if (absPct > 15) sClass = "story-red";
+    else if (absPct >= 5) sClass = "story-yellow";
 
-    storyEl.className = `p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm font-medium border-l-4 leading-relaxed mb-3.5 ${theme}`;
+    storyEl.className = `story-box ${sClass}`;
     storyEl.style.display = "block";
 
     if (isStream) {
@@ -364,7 +685,7 @@ async function loadStation(s) {
     }
   }
 
-  // Deduplicate Daily Data for Chart
+  // Daily Chart Data
   const dailyData = [];
   const seen = new Set();
   const secMap = {};
@@ -434,7 +755,7 @@ async function loadStation(s) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 20, bottom: 24, left: 6, right: 6 } },
+      layout: { padding: { top: 20, bottom: 24, left: 4, right: 4 } },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -446,9 +767,9 @@ async function loadStation(s) {
         }
       },
       scales: {
-        x: { 
+        x: {
           grid: { display: false },
-          ticks: { font: { size: 10, family: 'Plus Jakarta Sans' }, color: '#94a3b8' } 
+          ticks: { font: { size: 10, family: 'Plus Jakarta Sans' }, color: '#94a3b8' }
         },
         yPrimary: {
           position: 'left',
@@ -475,22 +796,14 @@ async function loadStation(s) {
 
 async function loadAll() {
   const btn = document.getElementById("refresh-btn");
-  const spinner = document.getElementById("refresh-spinner");
-  const text = document.getElementById("refresh-text");
   btn.disabled = true;
-  spinner.classList.remove("hidden");
-  text.textContent = "Updating...";
-
   for (let i = 0; i < stations.length; i++) {
     const s = stations[i];
     document.getElementById("status").textContent = `Syncing (${i + 1}/${stations.length}): ${s.name}...`;
     await loadStation(s);
     await new Promise(r => setTimeout(r, 450));
   }
-
   btn.disabled = false;
-  spinner.classList.add("hidden");
-  text.textContent = "Refresh Data";
   document.getElementById("status").textContent = `Live as of ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
 }
 
