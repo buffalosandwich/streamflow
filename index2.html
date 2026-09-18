@@ -60,7 +60,6 @@ Chart.register(ChartDataLabels);
 
 const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
 
-// Reservoirs with elevations sourced from basin data[cite: 5]
 const reservoirs = [
   { id: "BEVRESCO", name: "Beaver Reservoir", elev: "8,770 ft" },
   { id: "CONRESCO", name: "Continental Reservoir", elev: "10,270 ft" },
@@ -110,6 +109,8 @@ reservoirs.forEach(r => {
   container.appendChild(card);
 });
 
+const charts = {};
+
 async function loadReservoir(r) {
   const hist = await fetchDWRStorage(r.id);
   const row = document.getElementById(`row-${r.id}`);
@@ -140,20 +141,39 @@ async function loadReservoir(r) {
     storyDiv.innerHTML = `Storage has <strong>${changeWord} ${Math.abs(pct1).toFixed(1)}%</strong> since yesterday, and has <strong>${trendWord} ${Math.abs(pct7).toFixed(1)}%</strong> over the past week.`;
   }
 
-  const ctx = document.getElementById(`chart-${r.id}`).getContext("2d");
-  const recentData = hist.slice(-24);
+  // Deduplicate hourly readings into one daily value per day
+  const dailyStorage = [];
+  const seenDates = new Set();
   
-  new Chart(ctx, {
+  for (let i = hist.length - 1; i >= 0; i--) {
+    if (!hist[i].time) continue;
+    const dateObj = new Date(hist[i].time);
+    const dateStr = dateObj.toLocaleDateString();
+    
+    if (!seenDates.has(dateStr)) {
+      seenDates.add(dateStr);
+      dailyStorage.unshift({
+        timeLabel: `${dateObj.getMonth() + 1}/${dateObj.getDate()}`,
+        value: hist[i].value
+      });
+    }
+  }
+
+  const ctx = document.getElementById(`chart-${r.id}`).getContext("2d");
+  
+  if (charts[r.id]) charts[r.id].destroy();
+
+  charts[r.id] = new Chart(ctx, {
     type: "line",
     data: {
-      labels: recentData.map(d => new Date(d.time).getHours() + ":00"),
+      labels: dailyStorage.map(d => d.timeLabel),
       datasets: [{
         label: "Storage (ac-ft)",
-        data: recentData.map(d => d.value),
+        data: dailyStorage.map(d => d.value),
         borderColor: "#2e8b57",
         backgroundColor: "rgba(46, 139, 87, 0.1)",
         borderWidth: 2,
-        pointRadius: 2,
+        pointRadius: 3,
         tension: 0.3,
         fill: true,
         datalabels: { display: false }
@@ -162,10 +182,34 @@ async function loadReservoir(r) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { mode: "index", intersect: false } },
+      plugins: { 
+        legend: { display: false }, 
+        tooltip: { 
+          mode: "index", 
+          intersect: false,
+          callbacks: {
+            label: (item) => `${item.dataset.label}: ${item.raw != null ? item.raw.toLocaleString() + ' ac-ft' : '—'}`
+          }
+        } 
+      },
       scales: { 
-        x: { display: true, ticks: { font: { size: 10 } } },
-        y: { display: true, ticks: { font: { size: 10 } } }
+        x: { 
+          display: true, 
+          ticks: { font: { size: 10, family: 'Arial, sans-serif' } } 
+        },
+        y: { 
+          display: true, 
+          ticks: { 
+            font: { size: 10, family: 'Arial, sans-serif' },
+            callback: (val) => val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val
+          },
+          title: {
+            display: true,
+            text: 'acre-feet',
+            color: '#2e8b57',
+            font: { size: 11, weight: 'bold' }
+          }
+        }
       }
     }
   });
