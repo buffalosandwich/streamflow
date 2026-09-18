@@ -1,41 +1,77 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SLV Streams & Water Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #f8fafc; margin: 0; padding: 12px; color: #1e293b; }
-  h1 { font-size: 1.35em; margin: 8px 0 12px 0; color: #0f172a; font-weight: 800; }
-  #controls { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
-  button { padding: 8px 16px; border-radius: 8px; border: none; background: #0284c7; color: white; font-weight: 600; font-size: 0.9em; cursor: pointer; }
-  button:disabled { background: #94a3b8; }
-  #status { font-size: 0.82em; color: #64748b; font-weight: 500; }
-  .card { background: white; padding: 14px; margin-bottom: 14px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
-  .name { font-size: 1.05em; font-weight: 700; margin-bottom: 8px; }
-  .name a { color: #0f172a; text-decoration: none; }
-  .name a:hover { color: #0284c7; }
-  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .kpi-chip { background: #f1f5f9; padding: 6px 10px; border-radius: 6px; font-size: 0.82em; font-weight: 600; }
-  .temp-badge { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
-  .obs-time { font-size: 0.75em; color: #64748b; font-weight: normal; margin-left: 4px; }
-  .story-guide { font-size: 0.84em; line-height: 1.4; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
-  .story-green { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-  .story-yellow { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
-  .story-red { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-  .chart-wrapper { position: relative; height: 180px; width: 100%; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>San Luis Valley Water Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js & Datalabels -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+  </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-900 antialiased min-h-screen p-3 sm:p-6">
 
-<h1>San Luis Valley Stream & Temperature Monitor</h1>
-<div id="controls">
-  <button id="refresh-btn" onclick="loadAll()">Refresh Now</button>
-  <div id="status">Connecting to live DWR sensors...</div>
-</div>
-<div id="streams"></div>
+  <div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <header class="mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-extrabold tracking-tight text-slate-900">San Luis Valley Basin Monitor</h1>
+          <p class="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Real-time telemetry, live temperatures, and reservoir storage</p>
+        </div>
+        <button id="refresh-btn" onclick="loadAll()" class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition-all disabled:bg-slate-400 disabled:scale-100 cursor-pointer">
+          <svg id="refresh-spinner" class="w-4 h-4 hidden animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          <span id="refresh-text">Refresh Data</span>
+        </button>
+      </div>
+
+      <!-- Filters & Status -->
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-4">
+        <div class="inline-flex p-1 bg-slate-200/60 rounded-xl text-xs font-semibold">
+          <button class="filter-pill px-3 py-1.5 rounded-lg transition-all bg-white text-slate-900 shadow-sm" onclick="setFilter('all', this)">All Stations</button>
+          <button class="filter-pill px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900" onclick="setFilter('stream', this)">Streams (13)</button>
+          <button class="filter-pill px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900" onclick="setFilter('reservoir', this)">Reservoirs (8)</button>
+        </div>
+        <div id="status" class="text-xs font-medium text-slate-500">Initializing sensors...</div>
+      </div>
+    </header>
+
+    <!-- Stations Feed -->
+    <main id="stations-feed" class="space-y-5"></main>
+
+    <!-- Dashboard Legend -->
+    <footer class="mt-8 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">Understanding River & Pool Conditions</h2>
+      <div class="grid sm:grid-cols-3 gap-3 text-xs leading-relaxed">
+        <div class="flex gap-2.5 p-3 rounded-xl bg-emerald-50/70 border border-emerald-100">
+          <span class="w-3 h-3 rounded-full bg-emerald-500 shrink-0 mt-0.5"></span>
+          <div>
+            <strong class="text-emerald-900 block font-bold">Stable (&lt; 5% shift)</strong>
+            <span class="text-emerald-800">Steady river flow or pool level. Predictable wading, clear visibility, and minimal floating debris.</span>
+          </div>
+        </div>
+        <div class="flex gap-2.5 p-3 rounded-xl bg-amber-50/70 border border-amber-100">
+          <span class="w-3 h-3 rounded-full bg-amber-500 shrink-0 mt-0.5"></span>
+          <div>
+            <strong class="text-amber-900 block font-bold">Shifting (5% - 15% shift)</strong>
+            <span class="text-amber-800">Moderate rise or drop. Fish move toward banks; monitor footing while wading.</span>
+          </div>
+        </div>
+        <div class="flex gap-2.5 p-3 rounded-xl bg-rose-50/70 border border-rose-100">
+          <span class="w-3 h-3 rounded-full bg-rose-500 shrink-0 mt-0.5"></span>
+          <div>
+            <strong class="text-rose-900 block font-bold">Volatile (&gt; 15% shift)</strong>
+            <span class="text-rose-800">Surging flows or rapid drawdowns. Murky water, hazardous wading, and heavy drift.</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
 
 <script>
 Chart.register(ChartDataLabels);
@@ -43,26 +79,65 @@ Chart.register(ChartDataLabels);
 const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
 
 const stations = [
-  { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
-  { id: "ARKSALCO", name: "Arkansas River at Salida, CO" },
-  { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
-  { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
-  { id: "CONMOGCO", name: "Conejos River Near Mogote", gageParam: "GAGE_HT2" },
-  { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
-  { id: "ALABELCO", name: "Alamosa River Below Terrace Reservoir" },
-  { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
-  { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir" },
-  { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
-  { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" },
-  { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" },
-  { id: "LOSORTCO", name: "Los Pinos River Near Ortiz" }
+  // 13 Streams
+  { id: "NCLCONCO", type: "stream", name: "North Clear Creek Below Continental Reservoir" },
+  { id: "ARKSALCO", type: "stream", name: "Arkansas River at Salida, CO" },
+  { id: "ALABELCO", type: "stream", name: "Alamosa River Below Terrace Reservoir" },
+  { id: "ALATERCO", type: "stream", name: "Alamosa River Above Terrace Reservoir" },
+  { id: "BEVBEVCO", type: "stream", name: "Beaver Creek Below Beaver Creek Reservoir" },
+  { id: "CONPLACO", type: "stream", name: "Conejos River Below Platoro Reservoir" },
+  { id: "CONMOGCO", type: "stream", name: "Conejos River Near Mogote", gageParam: "GAGE_HT2" },
+  { id: "LAJCAPCO", type: "stream", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
+  { id: "RIOMILCO", type: "stream", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
+  { id: "RIOWAGCO", type: "stream", name: "Rio Grande at Wagon Wheel Gap" },
+  { id: "RIOTRICO", type: "stream", name: "Rio Grande Above Trinchera Creek Near La Sauses" },
+  { id: "TRIMTNCO", type: "stream", name: "Trinchera Creek Above Mountain Home Reservoir" },
+  { id: "LOSORTCO", type: "stream", name: "Los Pinos River Near Ortiz" },
+
+  // 8 Reservoirs (Santa Maria omitted, Platoro mapped to PLARESCO)
+  { id: "BEVRESCO", type: "reservoir", name: "Beaver Reservoir", elev: "8,770 ft" },
+  { id: "CONRESCO", type: "reservoir", name: "Continental Reservoir", elev: "10,270 ft" },
+  { id: "LAJRESCO", type: "reservoir", name: "La Jara Reservoir", elev: "9,700 ft" },
+  { id: "MTNRESCO", type: "reservoir", name: "Mountain Home Reservoir", elev: "8,150 ft" },
+  { id: "PLARESCO", type: "reservoir", name: "Platoro Reservoir", elev: "9,980 ft" },
+  { id: "RIORESCO", type: "reservoir", name: "Rio Grande Reservoir", elev: "9,390 ft" },
+  { id: "SANRESCO", type: "reservoir", name: "Sanchez Reservoir", elev: "8,260 ft" },
+  { id: "TERRESCO", type: "reservoir", name: "Terrace Reservoir", elev: "8,500 ft" }
 ];
+
+let activeFilter = "all";
+function setFilter(type, btn) {
+  activeFilter = type;
+  document.querySelectorAll('.filter-pill').forEach(el => {
+    el.classList.remove('bg-white', 'text-slate-900', 'shadow-sm');
+    el.classList.add('text-slate-600');
+  });
+  btn.classList.add('bg-white', 'text-slate-900', 'shadow-sm');
+  btn.classList.remove('text-slate-600');
+
+  stations.forEach(s => {
+    const card = document.getElementById(`card-${s.id}`);
+    if (card) card.style.display = (type === "all" || s.type === type) ? "block" : "none";
+  });
+}
 
 function fmtDate(d) {
   return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
-// 1. Live Instantaneous Reading (Matches public site precisely)
+function formatInches(feet) {
+  if (feet == null) return "0 in";
+  let inches = Math.round(Math.abs(feet) * 12);
+  if (inches === 0) return "0 in";
+  let f = Math.floor(inches / 12);
+  let i = inches % 12;
+  let parts = [];
+  if (f > 0) parts.push(f + " ft");
+  if (i > 0) parts.push(i + " in");
+  return parts.join(" ");
+}
+
+// Live 15-minute instantaneous reading
 async function fetchLiveReading(sid, param) {
   const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrystationreading?format=json&abbrev=${sid}&parameter=${param}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
@@ -70,15 +145,11 @@ async function fetchLiveReading(sid, param) {
     if (!res.ok) return null;
     const j = await res.json();
     const item = (j.ResultList && j.ResultList.length) ? j.ResultList[0] : null;
-    if (!item || item.measValue == null) return null;
-    return {
-      value: Number(item.measValue),
-      time: item.measDateTime || item.measDate
-    };
+    return (item && item.measValue != null) ? { value: Number(item.measValue), time: item.measDateTime || item.measDate } : null;
   } catch(e) { return null; }
 }
 
-// 2. Timeseries History for Charts
+// 10-day history for charts
 async function fetchDWRHistory(sid, param) {
   const start = new Date(Date.now() - 10 * 86400000);
   const end = new Date(Date.now() + 86400000);
@@ -95,24 +166,79 @@ async function fetchDWRHistory(sid, param) {
   } catch(e) { return []; }
 }
 
-function getPrimeBadge(tempF) {
-  if (tempF == null) return "";
-  if (tempF >= 50 && tempF <= 65) return `<span class="kpi-chip temp-badge">🎯 ${Math.round(tempF)}°F Prime Feeding</span>`;
-  if (tempF > 65 && tempF < 70) return `<span class="kpi-chip" style="background:#fef3c7; color:#92400e;">⚠️ ${Math.round(tempF)}°F Warm</span>`;
-  if (tempF >= 70) return `<span class="kpi-chip" style="background:#fee2e2; color:#991b1b;">🚫 ${Math.round(tempF)}°F Hoot Owl</span>`;
-  return `<span class="kpi-chip">❄️ ${Math.round(tempF)}°F Cold</span>`;
+function getTempBadge(tempF) {
+  if (tempF == null) return '';
+  const rounded = Math.round(tempF);
+  if (rounded >= 50 && rounded <= 65) {
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Prime Feeding</span>`;
+  }
+  if (rounded > 65 && rounded < 70) {
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Warm Water</span>`;
+  }
+  if (rounded >= 70) {
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">Hoot Owl</span>`;
+  }
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">Slow Cold</span>`;
 }
 
-const container = document.getElementById("streams");
+// Generate Station Cards
+const container = document.getElementById("stations-feed");
 stations.forEach(s => {
   const card = document.createElement("div");
-  card.className = "card";
+  card.className = "card bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200/80 transition-all";
   card.id = `card-${s.id}`;
+
+  const isStream = s.type === "stream";
+  const typeBadge = isStream 
+    ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-sky-50 text-sky-700 border border-sky-200">➔ Stream</span>`
+    : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200">⛯ Reservoir</span>`;
+
   card.innerHTML = `
-    <div class="name"><a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank">${s.name}</a></div>
-    <div class="badge-row" id="kpis-${s.id}"></div>
-    <div class="story-guide" id="story-${s.id}" style="display:none;"></div>
-    <div class="chart-wrapper"><canvas id="chart-${s.id}"></canvas></div>
+    <!-- Top Metadata Header -->
+    <div class="flex items-start justify-between gap-2 mb-3">
+      <div>
+        <div class="flex items-center gap-2 mb-1.5">
+          ${typeBadge}
+          <span class="text-xs font-semibold text-slate-400 tracking-wider">${s.id}</span>
+          ${s.elev ? `<span class="text-xs text-slate-400 font-medium">· Crest ${s.elev}</span>` : ''}
+        </div>
+        <h2 class="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+          <a href="https://dwr.state.co.us/Tools/Stations/${s.id}?params=${isStream ? 'DISCHRG,GAGE_HT,WATTEMP' : 'STORAGE,ELEV'}" target="_blank" class="hover:text-sky-600 transition-colors">
+            ${s.name}
+          </a>
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"></path></svg>
+        </h2>
+      </div>
+      <div id="badge-pill-${s.id}">
+        <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500">...</span>
+      </div>
+    </div>
+
+    <!-- 3-Column KPI Stat Strip -->
+    <div class="bg-slate-50/90 border border-slate-100 rounded-xl p-3 sm:p-4 grid grid-cols-3 gap-2 sm:gap-4 mb-3.5" id="kpis-${s.id}">
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">${isStream ? 'Flow Rate' : 'Storage'}</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">—</div>
+        <div class="text-[11px] font-semibold text-slate-400 mt-0.5">Loading...</div>
+      </div>
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">${isStream ? 'Gauge Stage' : 'Pool Level'}</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">—</div>
+        <div class="text-[11px] font-semibold text-slate-400 mt-0.5">Loading...</div>
+      </div>
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">${isStream ? 'Water Temp' : 'Dam Crest'}</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">—</div>
+      </div>
+    </div>
+
+    <!-- Condition Story Banner -->
+    <div id="story-${s.id}" class="p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm font-medium border-l-4 leading-relaxed mb-3.5" style="display:none;"></div>
+
+    <!-- Chart -->
+    <div class="chart-wrapper relative h-48 w-full">
+      <canvas id="chart-${s.id}"></canvas>
+    </div>
   `;
   container.appendChild(card);
 });
@@ -120,102 +246,187 @@ stations.forEach(s => {
 const charts = {};
 
 async function loadStation(s) {
-  const [liveTemp, liveFlow, liveGage, histFlow, histGage] = await Promise.all([
-    fetchLiveReading(s.id, "TEMP"),
-    fetchLiveReading(s.id, "DISCHRG"),
-    fetchLiveReading(s.id, s.gageParam || "GAGE_HT"),
-    fetchDWRHistory(s.id, "DISCHRG"),
-    fetchDWRHistory(s.id, s.gageParam || "GAGE_HT")
+  const isStream = s.type === "stream";
+  const primaryParam = isStream ? "DISCHRG" : "STORAGE";
+  const secondaryParam = isStream ? (s.gageParam || "GAGE_HT") : "ELEV";
+
+  // WATTEMP first for streams, fallback to TEMP
+  let liveTempPromise = Promise.resolve(null);
+  if (isStream) {
+    liveTempPromise = fetchLiveReading(s.id, "WATTEMP").then(r => r ? r : fetchLiveReading(s.id, "TEMP"));
+  }
+
+  const [livePrimary, liveSecondary, liveTemp, histPrimary, histSecondary] = await Promise.all([
+    fetchLiveReading(s.id, primaryParam),
+    fetchLiveReading(s.id, secondaryParam),
+    liveTempPromise,
+    fetchDWRHistory(s.id, primaryParam),
+    fetchDWRHistory(s.id, secondaryParam)
   ]);
 
-  // Render Real-Time KPI Strip
-  const kpiDiv = document.getElementById(`kpis-${s.id}`);
-  let timeStr = "";
-  if (liveTemp && liveTemp.time) {
-    const t = new Date(liveTemp.time);
-    timeStr = `<span class="obs-time">(${t.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})})</span>`;
+  const valPrimary = livePrimary ? livePrimary.value : (histPrimary.length ? histPrimary[histPrimary.length - 1].value : null);
+  const valSecondary = liveSecondary ? liveSecondary.value : (histSecondary.length ? histSecondary[histSecondary.length - 1].value : null);
+
+  // Shifts
+  let pct24 = null, pct7d = null;
+  if (histPrimary.length >= 2 && valPrimary != null) {
+    const prev24 = histPrimary.length > 24 ? histPrimary[histPrimary.length - 25].value : histPrimary[0].value;
+    const prev7d = histPrimary.length > 24*7 ? histPrimary[histPrimary.length - (24*7)].value : histPrimary[0].value;
+    if (prev24) pct24 = ((valPrimary - prev24) / prev24) * 100;
+    if (prev7d) pct7d = ((valPrimary - prev7d) / prev7d) * 100;
   }
 
-  const currentFlowVal = liveFlow ? liveFlow.value : (histFlow.length ? histFlow[histFlow.length - 1].value : null);
-  const currentGageVal = liveGage ? liveGage.value : (histGage.length ? histGage[histGage.length - 1].value : null);
-  const currentTempVal = liveTemp ? liveTemp.value : null;
-
-  kpiDiv.innerHTML = `
-    <span class="kpi-chip">Flow: <strong>${currentFlowVal != null ? Math.round(currentFlowVal) + ' cfs' : '—'}</strong></span>
-    <span class="kpi-chip">Stage: <strong>${currentGageVal != null ? currentGageVal.toFixed(2) + ' ft' : '—'}</strong></span>
-    ${currentTempVal != null ? `${getPrimeBadge(currentTempVal)}${timeStr}` : ''}
-  `;
-
-  // Trend Analysis
-  if (histFlow.length >= 2) {
-    const prevDayFlow = histFlow.length > 24 ? histFlow[histFlow.length - 25].value : histFlow[0].value;
-    const weekAgoFlow = histFlow.length > 24 * 7 ? histFlow[histFlow.length - (24 * 7)].value : histFlow[0].value;
-    const pct1 = ((currentFlowVal - prevDayFlow) / prevDayFlow) * 100;
-    const pct7 = ((currentFlowVal - weekAgoFlow) / weekAgoFlow) * 100;
-
-    const story = document.getElementById(`story-${s.id}`);
-    const theme = Math.abs(pct1) > 15 ? "story-red" : (Math.abs(pct1) >= 5 ? "story-yellow" : "story-green");
-    story.className = `story-guide ${theme}`;
-    story.style.display = "block";
-    story.innerHTML = `Current flow of <strong>${Math.round(currentFlowVal)} cfs</strong> is <strong>${Math.round(Math.abs(pct1))}% ${pct1 >= 0 ? 'more' : 'less'}</strong> than yesterday and has <strong>${pct7 >= 0 ? 'increased' : 'decreased'} ${Math.round(Math.abs(pct7))}%</strong> since last week.`;
+  let diff24Sec = null;
+  if (histSecondary.length >= 2 && valSecondary != null) {
+    const prev24Sec = histSecondary.length > 24 ? histSecondary[histSecondary.length - 25].value : histSecondary[0].value;
+    if (prev24Sec != null) diff24Sec = valSecondary - prev24Sec;
   }
 
-  // Daily Chart Aggregation
-  const dailyFlow = [];
-  const seenDates = new Set();
-  const gageMap = {};
-  histGage.forEach(g => { if (g.time) gageMap[new Date(g.time).toLocaleDateString()] = g.value; });
+  // Top Right Header Pill Badge
+  const badgeEl = document.getElementById(`badge-pill-${s.id}`);
+  if (pct24 != null) {
+    const absPct = Math.round(Math.abs(pct24));
+    const sign = pct24 >= 0 ? '+' : '-';
+    let pillStyle = "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (absPct > 15) pillStyle = "bg-rose-50 text-rose-700 border-rose-200";
+    else if (absPct >= 5) pillStyle = "bg-amber-50 text-amber-700 border-amber-200";
+    badgeEl.innerHTML = `<span class="px-2.5 py-1 rounded-full text-xs font-bold border ${pillStyle}">${sign}${absPct}% 24h</span>`;
+  }
 
-  for (let i = histFlow.length - 1; i >= 0; i--) {
-    const dStr = new Date(histFlow[i].time).toLocaleDateString();
-    if (!seenDates.has(dStr)) {
-      seenDates.add(dStr);
-      dailyFlow.unshift({
-        label: `${new Date(histFlow[i].time).getMonth() + 1}/${new Date(histFlow[i].time).getDate()}`,
-        flow: histFlow[i].value,
-        gage: gageMap[dStr] ?? null
+  // 3-Column KPI Block Population
+  const kpiEl = document.getElementById(`kpis-${s.id}`);
+  if (isStream) {
+    const tempF = liveTemp ? liveTemp.value : null;
+    const tempBadge = getTempBadge(tempF);
+    const flowSub = pct24 != null ? `<span class="${pct24 >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pct24 >= 0 ? '+' : ''}${pct24.toFixed(1)}% vs yest</span>` : 'Current';
+    const stageSub = diff24Sec != null ? `${formatInches(diff24Sec)} ${diff24Sec >= 0 ? 'higher' : 'lower'}` : 'Current';
+
+    kpiEl.innerHTML = `
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Flow Rate</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valPrimary != null ? Math.round(valPrimary) : '—'} <span class="text-xs font-semibold text-slate-500">cfs</span></div>
+        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${flowSub}</div>
+      </div>
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Gauge Stage</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valSecondary != null ? valSecondary.toFixed(2) : '—'} <span class="text-xs font-semibold text-slate-500">ft</span></div>
+        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${stageSub}</div>
+      </div>
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Water Temp</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-1.5 flex-wrap">
+          ${tempF != null ? Math.round(tempF) + '°F' : '—'}
+          ${tempBadge}
+        </div>
+      </div>
+    `;
+  } else {
+    const storSub = pct24 != null ? `<span class="${pct24 >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${pct24 >= 0 ? '+' : ''}${pct24.toFixed(1)}% vs yest</span>` : 'Current';
+    const elevSub = diff24Sec != null ? `${formatInches(diff24Sec)} ${diff24Sec >= 0 ? 'higher' : 'lower'}` : 'Pool Level';
+
+    kpiEl.innerHTML = `
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Storage</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valPrimary != null ? Math.round(valPrimary).toLocaleString() : '—'} <span class="text-xs font-semibold text-slate-500">ac-ft</span></div>
+        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${storSub}</div>
+      </div>
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Pool Elevation</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">${valSecondary != null ? valSecondary.toFixed(1) : '—'} <span class="text-xs font-semibold text-slate-500">ft</span></div>
+        <div class="text-[11px] font-semibold text-slate-500 mt-0.5">${elevSub}</div>
+      </div>
+      <div>
+        <div class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 mb-0.5">Dam Crest</div>
+        <div class="text-base sm:text-lg font-extrabold text-slate-900">${s.elev || '—'}</div>
+      </div>
+    `;
+  }
+
+  // Story Banner
+  const storyEl = document.getElementById(`story-${s.id}`);
+  if (pct24 != null) {
+    const absPct = Math.round(Math.abs(pct24));
+    let theme = "bg-emerald-50 text-emerald-900 border-emerald-500";
+    if (absPct > 15) theme = "bg-rose-50 text-rose-900 border-rose-500";
+    else if (absPct >= 5) theme = "bg-amber-50 text-amber-900 border-amber-500";
+
+    storyEl.className = `p-3 sm:p-3.5 rounded-xl text-xs sm:text-sm font-medium border-l-4 leading-relaxed mb-3.5 ${theme}`;
+    storyEl.style.display = "block";
+
+    if (isStream) {
+      const moreLess = pct24 >= 0 ? "more" : "less";
+      const weekTrend = pct7d != null ? ` and has <strong>${pct7d >= 0 ? 'increased' : 'decreased'} ${Math.round(Math.abs(pct7d))}%</strong> since last week.` : '.';
+      const depthText = diff24Sec != null ? ` Depth is <strong>${formatInches(diff24Sec)} ${diff24Sec >= 0 ? 'higher' : 'lower'}</strong> than yesterday's mark.` : '';
+      storyEl.innerHTML = `<strong>Current Flow: ${Math.round(valPrimary)} cfs.</strong> Water volume is <strong>${absPct}% ${moreLess}</strong> than yesterday${weekTrend}${depthText}`;
+    } else {
+      const fillDrop = pct24 >= 0 ? "gained" : "lost";
+      storyEl.innerHTML = `<strong>Current Storage: ${Math.round(valPrimary).toLocaleString()} ac-ft.</strong> The reservoir has <strong>${fillDrop} ${Math.abs(pct24).toFixed(1)}%</strong> in the past 24 hours.`;
+    }
+  }
+
+  // Deduplicate Daily Data for Chart
+  const dailyData = [];
+  const seen = new Set();
+  const secMap = {};
+  histSecondary.forEach(h => { if (h.time) secMap[new Date(h.time).toLocaleDateString()] = h.value; });
+
+  for (let i = histPrimary.length - 1; i >= 0; i--) {
+    const dStr = new Date(histPrimary[i].time).toLocaleDateString();
+    if (!seen.has(dStr)) {
+      seen.add(dStr);
+      dailyData.unshift({
+        dateLabel: `${new Date(histPrimary[i].time).getMonth() + 1}/${new Date(histPrimary[i].time).getDate()}`,
+        primary: histPrimary[i].value,
+        secondary: secMap[dStr] ?? null
       });
     }
   }
 
+  // Dual-Axis Chart with Decimal Fixes
   const ctx = document.getElementById(`chart-${s.id}`).getContext("2d");
   if (charts[s.id]) charts[s.id].destroy();
 
   charts[s.id] = new Chart(ctx, {
     type: "line",
     data: {
-      labels: dailyFlow.map(d => d.label),
+      labels: dailyData.map(d => d.dateLabel),
       datasets: [
         {
-          label: "Flow (cfs)",
-          data: dailyFlow.map(d => d.flow),
+          label: isStream ? "Flow (cfs)" : "Storage (ac-ft)",
+          data: dailyData.map(d => d.primary),
           borderColor: "#0284c7",
           backgroundColor: "rgba(2, 132, 199, 0.08)",
           fill: true,
           tension: 0.3,
-          yAxisID: 'yFlow',
+          borderWidth: 2,
+          pointRadius: 3.5,
+          yAxisID: 'yPrimary',
           datalabels: {
             align: 'bottom',
-            font: { size: 9, weight: 'bold' },
+            anchor: 'bottom',
+            font: { size: 9, weight: 'bold', family: 'Plus Jakarta Sans' },
             formatter: (v, c) => {
               if (c.dataIndex === 0) return '';
               const p = c.dataset.data[c.dataIndex - 1];
+              if (!p) return '';
               const pct = Math.round(((v - p) / p) * 100);
               return Math.abs(pct) < 1 ? '' : (pct > 0 ? '+' : '') + pct + '%';
             },
             color: (c) => {
               const p = c.dataset.data[c.dataIndex - 1];
-              return (c.dataset.data[c.dataIndex] - p) >= 0 ? '#166534' : '#991b1b';
+              return (c.dataset.data[c.dataIndex] - p) >= 0 ? '#16a34a' : '#dc2626';
             }
           }
         },
         {
-          label: "Gauge (ft)",
-          data: dailyFlow.map(d => d.gage),
+          label: isStream ? "Gauge (ft)" : "Elevation (ft)",
+          data: dailyData.map(d => d.secondary),
           borderColor: "#64748b",
           borderDash: [4, 4],
+          borderWidth: 2,
+          pointRadius: 2.5,
           tension: 0.3,
-          yAxisID: 'yGage',
+          yAxisID: 'ySecondary',
           datalabels: { display: false }
         }
       ]
@@ -223,26 +434,39 @@ async function loadStation(s) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 20, bottom: 20 } },
-      plugins: { legend: { display: false } },
+      layout: { padding: { top: 20, bottom: 24, left: 6, right: 6 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${Math.round(ctx.raw).toLocaleString()}`
+          }
+        }
+      },
       scales: {
-        x: { ticks: { font: { size: 10 } } },
-        yFlow: {
-          position: 'left',
-          ticks: {
-            font: { size: 10 },
-            callback: (v) => parseFloat(Number(v).toFixed(2))
-          },
-          title: { display: true, text: 'cfs', color: '#0284c7', font: { size: 10, weight: 'bold' } }
+        x: { 
+          grid: { display: false },
+          ticks: { font: { size: 10, family: 'Plus Jakarta Sans' }, color: '#94a3b8' } 
         },
-        yGage: {
+        yPrimary: {
+          position: 'left',
+          grid: { color: '#f1f5f9' },
+          ticks: {
+            font: { size: 10, family: 'Plus Jakarta Sans' },
+            color: '#0284c7',
+            callback: (val) => val >= 1000 ? (val / 1000).toFixed(1) + 'k' : parseFloat(Number(val).toFixed(2))
+          }
+        },
+        ySecondary: {
           position: 'right',
           grid: { drawOnChartArea: false },
           ticks: {
-            font: { size: 10 },
-            callback: (v) => parseFloat(Number(v).toFixed(2))
-          },
-          title: { display: true, text: 'feet', color: '#64748b', font: { size: 10, weight: 'bold' } }
+            font: { size: 10, family: 'Plus Jakarta Sans' },
+            color: '#64748b',
+            callback: (val) => parseFloat(Number(val).toFixed(2))
+          }
         }
       }
     }
@@ -251,14 +475,23 @@ async function loadStation(s) {
 
 async function loadAll() {
   const btn = document.getElementById("refresh-btn");
+  const spinner = document.getElementById("refresh-spinner");
+  const text = document.getElementById("refresh-text");
   btn.disabled = true;
-  document.getElementById("status").textContent = "Fetching live telemetry...";
-  for (const s of stations) {
+  spinner.classList.remove("hidden");
+  text.textContent = "Updating...";
+
+  for (let i = 0; i < stations.length; i++) {
+    const s = stations[i];
+    document.getElementById("status").textContent = `Syncing (${i + 1}/${stations.length}): ${s.name}...`;
     await loadStation(s);
     await new Promise(r => setTimeout(r, 450));
   }
+
   btn.disabled = false;
-  document.getElementById("status").textContent = `Updated at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+  spinner.classList.add("hidden");
+  text.textContent = "Refresh Data";
+  document.getElementById("status").textContent = `Live as of ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
 }
 
 loadAll();
