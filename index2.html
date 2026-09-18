@@ -3,378 +3,246 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SLV Reservoir Storage & Elevation Dashboard</title>
+<title>SLV Streams & Water Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <style>
-  body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
-  h1 { font-size: 1.4em; margin: 10px 0; color: #004085; }
-  #controls { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
-  button { padding: 8px 14px; border-radius: 6px; border: none; background: #0077cc; color: white; font-size: 0.95em; cursor: pointer; }
-  button:active { transform: scale(0.98); }
-  button:disabled { background: #888; cursor: not-allowed; }
-  #status { font-size: 0.85em; color: #555; }
-  #reservoirs { transition: opacity 0.3s ease; }
-  .card { background: white; padding: 12px; margin-bottom: 12px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-  .name { font-size: 1.05em; font-weight: bold; margin-bottom: 6px; }
-  .name a { color: #0077cc; text-decoration: none; }
-  .name a:hover { text-decoration: underline; }
-  .dam-crest { font-weight: normal; font-size: 0.85em; color: #666; margin-left: 6px; }
-  .row { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.9em; margin-bottom: 6px; align-items: center; }
-  .label { font-weight: bold; }
-  .value { font-weight: bold; color: #333; }
-  .subtext { font-weight: normal; color: #666; font-size: 0.95em; margin-left: 4px; }
-  
-  .story-banner { font-size: 0.85em; padding: 6px 8px; border-radius: 6px; margin-bottom: 6px; display: block; border: 1px solid transparent; }
-  .story-green { background: #d4edda; color: #155724; border-color: #c3e6cb; }
-  .story-green strong { color: #0b2e13; }
-  .story-yellow { background: #fff3cd; color: #856404; border-color: #ffeeba; }
-  .story-yellow strong { color: #533f03; }
-  .story-red { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-  .story-red strong { color: #4c1118; }
-  
-  .chart-wrapper { position: relative; height: 180px; width: 100%; margin-top: 8px; }
-  
-  #legend { margin-top: 20px; padding: 15px; background: #fff; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-  #legend h2 { font-size: 1.1em; margin-top: 0; }
-  .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9em; }
-  .box { width: 20px; height: 20px; border-radius: 4px; margin-right: 10px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #f8fafc; margin: 0; padding: 12px; color: #1e293b; }
+  h1 { font-size: 1.35em; margin: 8px 0 12px 0; color: #0f172a; font-weight: 800; }
+  #controls { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  button { padding: 8px 16px; border-radius: 8px; border: none; background: #0284c7; color: white; font-weight: 600; font-size: 0.9em; cursor: pointer; }
+  button:disabled { background: #94a3b8; }
+  #status { font-size: 0.82em; color: #64748b; font-weight: 500; }
+  .card { background: white; padding: 14px; margin-bottom: 14px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+  .name { font-size: 1.05em; font-weight: 700; margin-bottom: 8px; }
+  .name a { color: #0f172a; text-decoration: none; }
+  .name a:hover { color: #0284c7; }
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .kpi-chip { background: #f1f5f9; padding: 6px 10px; border-radius: 6px; font-size: 0.82em; font-weight: 600; }
+  .temp-badge { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+  .obs-time { font-size: 0.75em; color: #64748b; font-weight: normal; margin-left: 4px; }
+  .story-guide { font-size: 0.84em; line-height: 1.4; padding: 8px 10px; border-radius: 8px; margin-bottom: 10px; }
+  .story-green { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+  .story-yellow { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+  .story-red { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+  .chart-wrapper { position: relative; height: 180px; width: 100%; }
 </style>
 </head>
 <body>
 
-<h1>Rio Grande Headwaters - Reservoir Storage & Elevation</h1>
+<h1>San Luis Valley Stream & Temperature Monitor</h1>
 <div id="controls">
   <button id="refresh-btn" onclick="loadAll()">Refresh Now</button>
-  <div id="status">Loading reservoir data...</div>
+  <div id="status">Connecting to live DWR sensors...</div>
 </div>
-<div id="reservoirs"></div>
-
-<div id="legend">
-  <h2>Dashboard Legend & Readings</h2>
-  <div class="legend-item"><div class="box" style="background: #d4edda;"></div> <strong>Green (&lt; 5% change):</strong> Stable pool conditions.</div>
-  <div class="legend-item"><div class="box" style="background: #fff3cd;"></div> <strong>Yellow (5% - 15% change):</strong> Moderate filling or active drawdown.</div>
-  <div class="legend-item"><div class="box" style="background: #f8d7da;"></div> <strong>Red (&gt; 15% change):</strong> Rapid change or heavy drawdown.</div>
-  <div style="font-size:0.85em; color:#555; margin-top:8px;">
-    <strong>Graph Key:</strong> Solid Green Line = Storage (ac-ft, left axis) | Dashed Blue Line = Water Surface Elevation (feet, right axis).
-  </div>
-</div>
+<div id="streams"></div>
 
 <script>
 Chart.register(ChartDataLabels);
 
 const apiKey = "1p/J4DJW9hidoM37lgx2i+SqjdPFp8J+";
 
-const reservoirs = [
-  { id: "BEVRESCO", name: "Beaver Reservoir", damElev: "8,770 ft" },
-  { id: "CONRESCO", name: "Continental Reservoir", damElev: "10,270 ft" },
-  { id: "LAJRESCO", name: "La Jara Reservoir", damElev: "9,700 ft" },
-  { id: "MTNRESCO", name: "Mountain Home Reservoir", damElev: "8,150 ft" },
-  { id: "PLARESCO", name: "Platoro Reservoir", damElev: "9,980 ft" },
-  { id: "RIORESCO", name: "Rio Grande Reservoir", damElev: "9,390 ft" },
-  { id: "SANRESCO", name: "Sanchez Reservoir", damElev: "8,260 ft" },
-  { id: "TERRESCO", name: "Terrace Reservoir", damElev: "8,500 ft" }
+const stations = [
+  { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap" },
+  { id: "ARKSALCO", name: "Arkansas River at Salida, CO" },
+  { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede" },
+  { id: "CONPLACO", name: "Conejos River Below Platoro Reservoir" },
+  { id: "CONMOGCO", name: "Conejos River Near Mogote", gageParam: "GAGE_HT2" },
+  { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir" },
+  { id: "ALABELCO", name: "Alamosa River Below Terrace Reservoir" },
+  { id: "ALATERCO", name: "Alamosa River Above Terrace Reservoir" },
+  { id: "BEVBEVCO", name: "Beaver Creek Below Beaver Creek Reservoir" },
+  { id: "LAJCAPCO", name: "Lajara Creek at Gallegos Ranch Near Capulin" },
+  { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses" },
+  { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir" },
+  { id: "LOSORTCO", name: "Los Pinos River Near Ortiz" }
 ];
 
-reservoirs.sort((a, b) => a.name.localeCompare(b.name));
-
-function fmtDate(d) { 
-  return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`; 
+function fmtDate(d) {
+  return `${String(d.getMonth() + 1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
-function percentChange(current, past) {
-  if (current == null || past == null || past === 0) return null;
-  return ((current - past) / past) * 100;
+// 1. Live Instantaneous Reading (Matches public site precisely)
+async function fetchLiveReading(sid, param) {
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrystationreading?format=json&abbrev=${sid}&parameter=${param}&apiKey=${encodeURIComponent(apiKey)}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const j = await res.json();
+    const item = (j.ResultList && j.ResultList.length) ? j.ResultList[0] : null;
+    if (!item || item.measValue == null) return null;
+    return {
+      value: Number(item.measValue),
+      time: item.measDateTime || item.measDate
+    };
+  } catch(e) { return null; }
 }
 
-function formatInches(feet) {
-  if (feet == null) return "—";
-  let inches = Math.round(Math.abs(feet) * 12);
-  if (inches === 0) return "0 inches";
-  let f = Math.floor(inches / 12);
-  let i = inches % 12;
-  let parts = [];
-  if (f > 0) parts.push(f + (f === 1 ? " foot" : " feet"));
-  if (i > 0) parts.push(i + (i === 1 ? " inch" : " inches"));
-  return parts.join(" ");
-}
-
-function valueAtTarget(history, latestTime, days) {
-  if (!history || !history.length || !latestTime) return null;
-  const target = new Date(latestTime).getTime() - (days * 24 * 60 * 60 * 1000);
-  let best = history[0];
-  for (const h of history) {
-    const t = new Date(h.time).getTime();
-    if (t <= target) best = h;
-    else break;
-  }
-  return best ? best.value : null;
-}
-
-async function fetchDWR(sid, param) {
-  const now = new Date();
-  const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
-  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${sid}&parameter=${param}&startDate=${fmtDate(tenDaysAgo)}&endDate=${fmtDate(tomorrow)}&apiKey=${encodeURIComponent(apiKey)}`;
+// 2. Timeseries History for Charts
+async function fetchDWRHistory(sid, param) {
+  const start = new Date(Date.now() - 10 * 86400000);
+  const end = new Date(Date.now() + 86400000);
+  const url = `https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour?format=json&abbrev=${sid}&parameter=${param}&startDate=${fmtDate(start)}&endDate=${fmtDate(end)}&apiKey=${encodeURIComponent(apiKey)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
     const j = await res.json();
-    return (j.ResultList || []).map(d => ({ 
-      time: d.measDate || d.measDateTime, 
-      value: d.measValue != null ? Number(d.measValue) : null 
-    }));
+    const list = (j.ResultList || [])
+      .filter(d => d.measValue != null)
+      .map(d => ({ time: d.measDate || d.measDateTime, value: Number(d.measValue) }));
+    list.sort((a, b) => new Date(a.time) - new Date(b.time));
+    return list;
   } catch(e) { return []; }
 }
 
-const container = document.getElementById("reservoirs");
-reservoirs.forEach(r => {
+function getPrimeBadge(tempF) {
+  if (tempF == null) return "";
+  if (tempF >= 50 && tempF <= 65) return `<span class="kpi-chip temp-badge">🎯 ${Math.round(tempF)}°F Prime Feeding</span>`;
+  if (tempF > 65 && tempF < 70) return `<span class="kpi-chip" style="background:#fef3c7; color:#92400e;">⚠️ ${Math.round(tempF)}°F Warm</span>`;
+  if (tempF >= 70) return `<span class="kpi-chip" style="background:#fee2e2; color:#991b1b;">🚫 ${Math.round(tempF)}°F Hoot Owl</span>`;
+  return `<span class="kpi-chip">❄️ ${Math.round(tempF)}°F Cold</span>`;
+}
+
+const container = document.getElementById("streams");
+stations.forEach(s => {
   const card = document.createElement("div");
   card.className = "card";
-  card.id = `card-${r.id}`;
+  card.id = `card-${s.id}`;
   card.innerHTML = `
-    <div class="name">
-      <a href="https://dwr.state.co.us/Tools/Stations/${r.id}?params=STORAGE,ELEV" target="_blank" rel="noopener noreferrer">${r.name}</a>
-      <span class="dam-crest">(Dam Crest: ${r.damElev})</span>
-    </div>
-    <div class="row" id="row-storage-${r.id}">
-      <span class="label">Current Storage:</span> <span class="value">Loading...</span>
-    </div>
-    <div class="row" id="row-elev-${r.id}">
-      <span class="label">Water Surface Elevation:</span> <span class="value">Loading...</span>
-    </div>
-    <div id="story-storage-${r.id}" class="story-banner" style="display:none;"></div>
-    <div id="story-elev-${r.id}" class="story-banner" style="display:none;"></div>
-    <div class="chart-wrapper"><canvas id="chart-${r.id}"></canvas></div>
+    <div class="name"><a href="https://dwr.state.co.us/Tools/Stations/${s.id}" target="_blank">${s.name}</a></div>
+    <div class="badge-row" id="kpis-${s.id}"></div>
+    <div class="story-guide" id="story-${s.id}" style="display:none;"></div>
+    <div class="chart-wrapper"><canvas id="chart-${s.id}"></canvas></div>
   `;
   container.appendChild(card);
 });
 
 const charts = {};
 
-async function loadReservoir(r) {
-  // Query both STORAGE and ELEV measurements from DWR API
-  const [histStorage, histElev] = await Promise.all([
-    fetchDWR(r.id, "STORAGE"),
-    fetchDWR(r.id, "ELEV")
+async function loadStation(s) {
+  const [liveTemp, liveFlow, liveGage, histFlow, histGage] = await Promise.all([
+    fetchLiveReading(s.id, "TEMP"),
+    fetchLiveReading(s.id, "DISCHRG"),
+    fetchLiveReading(s.id, s.gageParam || "GAGE_HT"),
+    fetchDWRHistory(s.id, "DISCHRG"),
+    fetchDWRHistory(s.id, s.gageParam || "GAGE_HT")
   ]);
 
-  const storageRow = document.getElementById(`row-storage-${r.id}`);
-  const elevRow = document.getElementById(`row-elev-${r.id}`);
-  const storyStorageDiv = document.getElementById(`story-storage-${r.id}`);
-  const storyElevDiv = document.getElementById(`story-elev-${r.id}`);
-
-  // 1. Process STORAGE Telemetry
-  let latestStorage = null;
-  if (histStorage.length > 0) {
-    const latest = histStorage[histStorage.length - 1];
-    latestStorage = latest.value;
-    const prevDayStorage = valueAtTarget(histStorage, latest.time, 1);
-    const lastWeekStorage = valueAtTarget(histStorage, latest.time, 7);
-
-    let storageDeltaText = "";
-    if (latestStorage != null && prevDayStorage != null) {
-      const pct1 = percentChange(latestStorage, prevDayStorage);
-      const sign = pct1 >= 0 ? "+" : "";
-      storageDeltaText = ` <span class="subtext">(${sign}${pct1.toFixed(1)}% from yesterday)</span>`;
-    }
-
-    storageRow.innerHTML = `
-      <span class="label">Current Storage:</span>
-      <span class="value">${latestStorage != null ? latestStorage.toLocaleString(undefined, {maximumFractionDigits: 1}) + ' ac-ft' : '—'}${storageDeltaText}</span>
-    `;
-
-    if (latestStorage != null && prevDayStorage != null && lastWeekStorage != null) {
-      const pct1 = percentChange(latestStorage, prevDayStorage);
-      const pct7 = percentChange(latestStorage, lastWeekStorage);
-      const absPct1 = Math.abs(pct1).toFixed(1);
-      const absPct7 = Math.abs(pct7).toFixed(1);
-      const gainLoss1 = pct1 >= 0 ? "gained" : "lost";
-      const trend7 = pct7 >= 0 ? "increased" : "decreased";
-
-      const theme = Math.abs(pct1) > 15 ? "story-red" : (Math.abs(pct1) >= 5 ? "story-yellow" : "story-green");
-      storyStorageDiv.className = `story-banner ${theme}`;
-      storyStorageDiv.style.display = "block";
-      storyStorageDiv.innerHTML = `<strong>Current Storage: ${latestStorage.toLocaleString(undefined, {maximumFractionDigits: 1})} ac-ft:</strong> The reservoir has <strong>${gainLoss1} ${absPct1}%</strong> since yesterday, and has <strong>${trend7} ${absPct7}%</strong> since last week.`;
-    }
-  } else {
-    storageRow.innerHTML = `<span class="label">Current Storage:</span> <span class="value" style="color:#888; font-weight:normal;">No live storage reported</span>`;
+  // Render Real-Time KPI Strip
+  const kpiDiv = document.getElementById(`kpis-${s.id}`);
+  let timeStr = "";
+  if (liveTemp && liveTemp.time) {
+    const t = new Date(liveTemp.time);
+    timeStr = `<span class="obs-time">(${t.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'})})</span>`;
   }
 
-  // 2. Process ELEVATION Measurement Telemetry
-  let latestElev = null;
-  if (histElev.length > 0) {
-    const latest = histElev[histElev.length - 1];
-    latestElev = latest.value;
-    const prevDayElev = valueAtTarget(histElev, latest.time, 1);
-    const lastWeekElev = valueAtTarget(histElev, latest.time, 7);
+  const currentFlowVal = liveFlow ? liveFlow.value : (histFlow.length ? histFlow[histFlow.length - 1].value : null);
+  const currentGageVal = liveGage ? liveGage.value : (histGage.length ? histGage[histGage.length - 1].value : null);
+  const currentTempVal = liveTemp ? liveTemp.value : null;
 
-    let elevDeltaText = "";
-    if (latestElev != null && prevDayElev != null) {
-      const diff = latestElev - prevDayElev;
-      const higherLower = diff >= 0 ? "higher" : "lower";
-      elevDeltaText = ` <span class="subtext">(${formatInches(diff)} ${higherLower} than yesterday)</span>`;
-    }
+  kpiDiv.innerHTML = `
+    <span class="kpi-chip">Flow: <strong>${currentFlowVal != null ? Math.round(currentFlowVal) + ' cfs' : '—'}</strong></span>
+    <span class="kpi-chip">Stage: <strong>${currentGageVal != null ? currentGageVal.toFixed(2) + ' ft' : '—'}</strong></span>
+    ${currentTempVal != null ? `${getPrimeBadge(currentTempVal)}${timeStr}` : ''}
+  `;
 
-    elevRow.innerHTML = `
-      <span class="label">Water Surface Elevation:</span>
-      <span class="value" style="color:#0056b3;">${latestElev != null ? latestElev.toFixed(2) + ' ft' : '—'}${elevDeltaText}</span>
-    `;
+  // Trend Analysis
+  if (histFlow.length >= 2) {
+    const prevDayFlow = histFlow.length > 24 ? histFlow[histFlow.length - 25].value : histFlow[0].value;
+    const weekAgoFlow = histFlow.length > 24 * 7 ? histFlow[histFlow.length - (24 * 7)].value : histFlow[0].value;
+    const pct1 = ((currentFlowVal - prevDayFlow) / prevDayFlow) * 100;
+    const pct7 = ((currentFlowVal - weekAgoFlow) / weekAgoFlow) * 100;
 
-    if (latestElev != null && prevDayElev != null && lastWeekElev != null) {
-      const diff1 = latestElev - prevDayElev;
-      const higherLower1 = diff1 >= 0 ? "higher" : "lower";
-      const diff7 = latestElev - lastWeekElev;
-      const higherLower7 = diff7 >= 0 ? "higher" : "lower";
-      const pct1 = percentChange(latestElev, prevDayElev);
-
-      const theme = Math.abs(pct1) > 15 ? "story-red" : (Math.abs(pct1) >= 5 ? "story-yellow" : "story-green");
-      storyElevDiv.className = `story-banner ${theme}`;
-      storyElevDiv.style.display = "block";
-      storyElevDiv.innerHTML = `<strong>Water Surface Elevation: ${latestElev.toFixed(2)} ft:</strong> Pool level is <strong>${formatInches(diff1)} ${higherLower1}</strong> than yesterday and <strong>${formatInches(diff7)} ${higherLower7}</strong> than last week.`;
-    }
-  } else {
-    elevRow.innerHTML = `<span class="label">Water Surface Elevation:</span> <span class="value" style="color:#888; font-weight:normal;">No live elevation sensor on telemetry (Dam crest: ${r.damElev})</span>`;
+    const story = document.getElementById(`story-${s.id}`);
+    const theme = Math.abs(pct1) > 15 ? "story-red" : (Math.abs(pct1) >= 5 ? "story-yellow" : "story-green");
+    story.className = `story-guide ${theme}`;
+    story.style.display = "block";
+    story.innerHTML = `Current flow of <strong>${Math.round(currentFlowVal)} cfs</strong> is <strong>${Math.round(Math.abs(pct1))}% ${pct1 >= 0 ? 'more' : 'less'}</strong> than yesterday and has <strong>${pct7 >= 0 ? 'increased' : 'decreased'} ${Math.round(Math.abs(pct7))}%</strong> since last week.`;
   }
 
-  // 3. Aggregate Daily Timeseries for the Chart
-  const storageMap = {};
-  const elevMap = {};
-  histStorage.forEach(h => {
-    if (h.time && h.value !== null) storageMap[new Date(h.time).toLocaleDateString()] = h.value;
-  });
-  histElev.forEach(h => {
-    if (h.time && h.value !== null) elevMap[new Date(h.time).toLocaleDateString()] = h.value;
-  });
-
-  const allTimestamps = [...histStorage, ...histElev]
-    .filter(h => h.time)
-    .map(h => ({ dateObj: new Date(h.time), dateStr: new Date(h.time).toLocaleDateString() }));
-  allTimestamps.sort((a, b) => a.dateObj - b.dateObj);
-
+  // Daily Chart Aggregation
+  const dailyFlow = [];
   const seenDates = new Set();
-  const dailyData = [];
-  allTimestamps.forEach(item => {
-    if (!seenDates.has(item.dateStr)) {
-      seenDates.add(item.dateStr);
-      dailyData.push({
-        label: `${item.dateObj.getMonth() + 1}/${item.dateObj.getDate()}`,
-        storage: storageMap[item.dateStr] ?? null,
-        elev: elevMap[item.dateStr] ?? null
+  const gageMap = {};
+  histGage.forEach(g => { if (g.time) gageMap[new Date(g.time).toLocaleDateString()] = g.value; });
+
+  for (let i = histFlow.length - 1; i >= 0; i--) {
+    const dStr = new Date(histFlow[i].time).toLocaleDateString();
+    if (!seenDates.has(dStr)) {
+      seenDates.add(dStr);
+      dailyFlow.unshift({
+        label: `${new Date(histFlow[i].time).getMonth() + 1}/${new Date(histFlow[i].time).getDate()}`,
+        flow: histFlow[i].value,
+        gage: gageMap[dStr] ?? null
       });
     }
-  });
-
-  const hasStorage = dailyData.some(d => d.storage !== null);
-  const hasElev = dailyData.some(d => d.elev !== null);
-
-  const ctx = document.getElementById(`chart-${r.id}`).getContext("2d");
-  if (charts[r.id]) charts[r.id].destroy();
-
-  const datasets = [];
-
-  if (hasStorage) {
-    datasets.push({
-      label: "Storage (ac-ft)",
-      data: dailyData.map(d => d.storage),
-      borderColor: "#2e8b57",
-      backgroundColor: "rgba(46, 139, 87, 0.08)",
-      borderWidth: 2,
-      pointRadius: 3,
-      tension: 0.3,
-      yAxisID: 'yStorage',
-      spanGaps: true,
-      datalabels: {
-        align: 'bottom',
-        anchor: 'bottom',
-        font: { size: 10, weight: 'bold' },
-        formatter: (v, ctx) => {
-          if (ctx.dataIndex === 0) return '';
-          const prev = ctx.dataset.data[ctx.dataIndex - 1];
-          if (!prev) return '';
-          const pct = ((v - prev) / prev) * 100;
-          return Math.abs(pct) < 1 ? '' : (pct > 0 ? '+' : '') + Math.round(pct) + '%';
-        },
-        color: (ctx) => {
-          if (ctx.dataIndex === 0) return '#777';
-          const prev = ctx.dataset.data[ctx.dataIndex - 1];
-          if (!prev) return '#777';
-          const pct = ((ctx.dataset.data[ctx.dataIndex] - prev) / prev) * 100;
-          return pct > 1 ? '#2e8b57' : (pct < -1 ? '#b22222' : '#777');
-        }
-      }
-    });
   }
 
-  if (hasElev) {
-    datasets.push({
-      label: "Elevation (ft)",
-      data: dailyData.map(d => d.elev),
-      borderColor: "#0077cc",
-      backgroundColor: "transparent",
-      borderDash: [5, 5],
-      borderWidth: 2,
-      pointRadius: 3,
-      tension: 0.3,
-      yAxisID: 'yElev',
-      spanGaps: true,
-      datalabels: {
-        align: 'top',
-        anchor: 'top',
-        font: { size: 10, weight: 'bold' },
-        color: '#0077cc',
-        formatter: (v) => v != null ? v.toFixed(1) + ' ft' : ''
-      }
-    });
-  }
+  const ctx = document.getElementById(`chart-${s.id}`).getContext("2d");
+  if (charts[s.id]) charts[s.id].destroy();
 
-  charts[r.id] = new Chart(ctx, {
+  charts[s.id] = new Chart(ctx, {
     type: "line",
     data: {
-      labels: dailyData.map(d => d.label),
-      datasets: datasets
+      labels: dailyFlow.map(d => d.label),
+      datasets: [
+        {
+          label: "Flow (cfs)",
+          data: dailyFlow.map(d => d.flow),
+          borderColor: "#0284c7",
+          backgroundColor: "rgba(2, 132, 199, 0.08)",
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'yFlow',
+          datalabels: {
+            align: 'bottom',
+            font: { size: 9, weight: 'bold' },
+            formatter: (v, c) => {
+              if (c.dataIndex === 0) return '';
+              const p = c.dataset.data[c.dataIndex - 1];
+              const pct = Math.round(((v - p) / p) * 100);
+              return Math.abs(pct) < 1 ? '' : (pct > 0 ? '+' : '') + pct + '%';
+            },
+            color: (c) => {
+              const p = c.dataset.data[c.dataIndex - 1];
+              return (c.dataset.data[c.dataIndex] - p) >= 0 ? '#166534' : '#991b1b';
+            }
+          }
+        },
+        {
+          label: "Gauge (ft)",
+          data: dailyFlow.map(d => d.gage),
+          borderColor: "#64748b",
+          borderDash: [4, 4],
+          tension: 0.3,
+          yAxisID: 'yGage',
+          datalabels: { display: false }
+        }
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      layout: { padding: { top: 25, bottom: 20 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          mode: "index",
-          intersect: false,
-          callbacks: {
-            label: (item) => {
-              if (item.dataset.yAxisID === 'yStorage') {
-                return `${item.dataset.label}: ${item.raw != null ? item.raw.toLocaleString() + ' ac-ft' : '—'}`;
-              }
-              return `${item.dataset.label}: ${item.raw != null ? item.raw.toFixed(2) + ' ft' : '—'}`;
-            }
-          }
-        }
-      },
+      layout: { padding: { top: 20, bottom: 20 } },
+      plugins: { legend: { display: false } },
       scales: {
-        x: { display: true, ticks: { font: { size: 10 } } },
-        yStorage: {
-          type: 'linear',
-          display: hasStorage,
+        x: { ticks: { font: { size: 10 } } },
+        yFlow: {
           position: 'left',
-          beginAtZero: false,
-          title: { display: true, text: 'ac-ft', color: '#2e8b57', font: { size: 11, weight: 'bold' } },
-          ticks: { 
-            font: { size: 10 }, 
-            color: '#2e8b57',
-            callback: (val) => val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val
-          }
+          ticks: {
+            font: { size: 10 },
+            callback: (v) => parseFloat(Number(v).toFixed(2))
+          },
+          title: { display: true, text: 'cfs', color: '#0284c7', font: { size: 10, weight: 'bold' } }
         },
-        yElev: {
-          type: 'linear',
-          display: hasElev,
+        yGage: {
           position: 'right',
-          beginAtZero: false,
           grid: { drawOnChartArea: false },
-          title: { display: hasElev, text: 'feet', color: '#0077cc', font: { size: 11, weight: 'bold' } },
-          ticks: { font: { size: 10 }, color: '#0077cc' }
+          ticks: {
+            font: { size: 10 },
+            callback: (v) => parseFloat(Number(v).toFixed(2))
+          },
+          title: { display: true, text: 'feet', color: '#64748b', font: { size: 10, weight: 'bold' } }
         }
       }
     }
@@ -384,16 +252,13 @@ async function loadReservoir(r) {
 async function loadAll() {
   const btn = document.getElementById("refresh-btn");
   btn.disabled = true;
-  document.getElementById("status").textContent = "Contacting DWR servers for storage and elevation logs...";
-
-  for (const r of reservoirs) {
-    await loadReservoir(r);
-    // 400ms spacing to prevent API throttling
-    await new Promise(res => setTimeout(res, 400));
+  document.getElementById("status").textContent = "Fetching live telemetry...";
+  for (const s of stations) {
+    await loadStation(s);
+    await new Promise(r => setTimeout(r, 450));
   }
-
   btn.disabled = false;
-  document.getElementById("status").textContent = `Last refreshed at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+  document.getElementById("status").textContent = `Updated at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
 }
 
 loadAll();
