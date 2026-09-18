@@ -65,7 +65,7 @@ const reservoirs = [
   { id: "CONRESCO", name: "Continental Reservoir", elev: "10,270 ft" },
   { id: "LAJRESCO", name: "La Jara Reservoir", elev: "9,700 ft" },
   { id: "MTNRESCO", name: "Mountain Home Reservoir", elev: "8,150 ft" },
-  { id: "PLARECCO", name: "Platoro Reservoir", elev: "9,980 ft" },
+  { id: "PLARESCO", name: "Platoro Reservoir", elev: "9,980 ft" }, // Corrected ID
   { id: "RIORESCO", name: "Rio Grande Reservoir", elev: "9,390 ft" },
   { id: "SANRESCO", name: "Sanchez Reservoir", elev: "8,260 ft" },
   { id: "STMRESCO", name: "Santa Maria Reservoir", elev: "9,490 ft" },
@@ -141,7 +141,6 @@ async function loadReservoir(r) {
     storyDiv.innerHTML = `Storage has <strong>${changeWord} ${Math.abs(pct1).toFixed(1)}%</strong> since yesterday, and has <strong>${trendWord} ${Math.abs(pct7).toFixed(1)}%</strong> over the past week.`;
   }
 
-  // Deduplicate hourly readings into one daily value per day
   const dailyStorage = [];
   const seenDates = new Set();
   
