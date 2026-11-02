@@ -101,8 +101,8 @@
 
     <div class="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex items-center gap-1.5 overflow-x-auto text-xs" id="filter-bar">
-        <button type="button" data-filter="all" class="filter-btn min-h-11 px-3 rounded-lg font-semibold bg-slate-900 text-white whitespace-nowrap">All waters (21)</button>
-        <button type="button" data-filter="streams" class="filter-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">Rivers (13)</button>
+        <button type="button" data-filter="all" class="filter-btn min-h-11 px-3 rounded-lg font-semibold bg-slate-900 text-white whitespace-nowrap">All waters (22)</button>
+        <button type="button" data-filter="streams" class="filter-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">Rivers (14)</button>
         <button type="button" data-filter="reservoirs" class="filter-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">Reservoirs (8)</button>
         <button type="button" data-filter="alerts" class="filter-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">Needs a look</button>
       </div>
@@ -149,7 +149,7 @@
         </section>
         <section class="border-t border-slate-200 pt-3">
           <h3 class="font-bold text-slate-900 mb-1 uppercase tracking-wider text-[11px]">Water temperature</h3>
-          <p class="mb-2">Live temperature uses DWR parameter <strong>WATTEMP</strong>, already in °F. There is no stand-in number. Only Beaver Creek below the reservoir, Conejos below Platoro, Rio Grande at Thirty Mile, and Rio Grande at Wagon Wheel Gap have a probe in this list. Everyone else says “No probe.”</p>
+          <p class="mb-2">Live temperature uses DWR parameter <strong>WATTEMP</strong>, already in °F. There is no stand-in number. Only Beaver Creek below the reservoir, Conejos below Platoro, Rio Grande at Thirty Mile, Rio Grande at Wagon Wheel Gap, and Rio Grande near Lobatos have a probe in this list. Everyone else says “No probe.”</p>
           <ul class="space-y-1 text-slate-600">
             <li>Under 45°F · cold / slow</li>
             <li>45–48°F · cool</li>
@@ -179,7 +179,7 @@
     const ELEVATION_DATUM_FT = 2000;
     const CHART_HOURS = 72;
     const STALE_MS = 26 * HOUR_MS;
-    const PROBE_STATIONS = new Set(["BEVBEVCO", "CONPLACO", "RIOMILCO", "RIOWAGCO"]);
+    const PROBE_STATIONS = new Set(["BEVBEVCO", "CONPLACO", "RIOLOBCO", "RIOMILCO", "RIOWAGCO"]);
 
     const STREAMS = [
       { id: "ALABELCO", name: "Alamosa River Below Terrace Reservoir", river: "Alamosa", gageParam: "GAGE_HT" },
@@ -192,6 +192,7 @@
       { id: "LOSORTCO", name: "Los Pinos River Near Ortiz", river: "Los Pinos", gageParam: "GAGE_HT" },
       { id: "NCLCONCO", name: "North Clear Creek Below Continental Reservoir", river: "Clear Creek", gageParam: "GAGE_HT" },
       { id: "RIOMILCO", name: "Rio Grande at Thirty Mile Bridge Near Creede", river: "Rio Grande", gageParam: "GAGE_HT" },
+      { id: "RIOLOBCO", name: "Rio Grande Near Lobatos", river: "Rio Grande", gageParam: "GAGE_HT" },
       { id: "RIOWAGCO", name: "Rio Grande at Wagon Wheel Gap", river: "Rio Grande", gageParam: "GAGE_HT" },
       { id: "RIOTRICO", name: "Rio Grande Above Trinchera Creek Near La Sauses", river: "Rio Grande", gageParam: "GAGE_HT" },
       { id: "TRIMTNCO", name: "Trinchera Creek Above Mountain Home Reservoir", river: "Trinchera", gageParam: "GAGE_HT" }
@@ -520,7 +521,7 @@
       const flowNow = {
         ALABELCO: 22, ALATERCO: 16, ARKSALCO: 310, BEVBEVCO: 14, CONPLACO: 42,
         CONMOGCO: 78, LAJCAPCO: 7.5, LOSORTCO: 18, NCLCONCO: 11, RIOMILCO: 38,
-        RIOWAGCO: 52, RIOTRICO: 190, TRIMTNCO: 5.4
+        RIOWAGCO: 52, RIOLOBCO: 680, RIOTRICO: 190, TRIMTNCO: 5.4
       };
       const dayPct = {
         LAJCAPCO: 42, RIOMILCO: -18, BEVBEVCO: 8, ARKSALCO: 2, CONMOGCO: 6, TRIMTNCO: -9
@@ -531,7 +532,7 @@
       const gageNow = {
         ALABELCO: 1.42, ALATERCO: 1.2, ARKSALCO: 2.85, BEVBEVCO: 1.05, CONPLACO: 1.66,
         CONMOGCO: 7, LAJCAPCO: 0.82, LOSORTCO: 1.15, NCLCONCO: 0.94, RIOMILCO: 1.19,
-        RIOWAGCO: 1.48, RIOTRICO: 2.4, TRIMTNCO: 0.7
+        RIOWAGCO: 1.48, RIOLOBCO: 2.59, RIOTRICO: 2.4, TRIMTNCO: 0.7
       };
       const flow = {};
       const gage = {};
@@ -548,7 +549,7 @@
         if (station.gageParam === "GAGE_HT2") gage2[station.id] = gSeries;
         else gage[station.id] = gSeries;
         if (PROBE_STATIONS.has(station.id)) {
-          const base = station.id === "RIOWAGCO" ? 39.9 : 45.5;
+          const base = station.id === "RIOWAGCO" ? 39.9 : station.id === "RIOLOBCO" ? 51.2 : 45.5;
           const tSeries = sampleSeries(base, 0, 0, false).map((p) => ({ ...p, value: Math.round(base * 10) / 10, unit: "degF" }));
           temp[station.id] = tSeries;
         }
