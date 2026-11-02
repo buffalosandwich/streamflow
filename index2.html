@@ -99,7 +99,8 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 mb-5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div class="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 mb-5 flex flex-col gap-3">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex items-center gap-1.5 overflow-x-auto text-xs" id="filter-bar">
         <button type="button" data-filter="all" class="filter-btn min-h-11 px-3 rounded-lg font-semibold bg-slate-900 text-white whitespace-nowrap">All waters (22)</button>
         <button type="button" data-filter="streams" class="filter-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">Rivers (14)</button>
@@ -109,6 +110,14 @@
       <div class="relative w-full md:w-72">
         <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" aria-hidden="true"></i>
         <input id="search-input" type="search" placeholder="Name or station, e.g. Conejos" class="w-full min-h-11 pl-9 pr-8 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500">
+      </div>
+      </div>
+      <div class="flex items-center gap-1.5 overflow-x-auto text-xs" id="range-bar" role="group" aria-label="Graph time range">
+        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 shrink-0 pr-1">Graphs</span>
+        <button type="button" data-range="24h" class="range-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">24 hours</button>
+        <button type="button" data-range="3d" class="range-btn min-h-11 px-3 rounded-lg font-semibold bg-slate-900 text-white whitespace-nowrap">3 days</button>
+        <button type="button" data-range="7d" class="range-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">7 days</button>
+        <button type="button" data-range="15d" class="range-btn min-h-11 px-3 rounded-lg font-medium bg-slate-100 text-slate-700 whitespace-nowrap">15 days</button>
       </div>
     </div>
 
@@ -164,7 +173,7 @@
         </section>
         <section class="border-t border-slate-200 pt-3">
           <h3 class="font-bold text-slate-900 mb-1 uppercase tracking-wider text-[11px]">Chart and missing data</h3>
-          <p>The line is hourly for the last 72 hours. It is not one dot per day, so a release that lasts a morning still shows up. The 24-hour and 7-day comparisons stay in the sentence. If DWR has no reading, the card says so. Sample data is off unless you turn it on, and it is labeled on every card.</p>
+          <p>The line is hourly. Use Graphs to show the last 24 hours, 3 days, 7 days, or 15 days on every chart at once. It is not one dot per day, so a release that lasts a morning still shows up. The 24-hour and 7-day comparisons stay in the sentence. If DWR has no reading, the card says so. Sample data is off unless you turn it on, and it is labeled on every card.</p>
         </section>
       </div>
       <div class="p-3 bg-slate-50 border-t border-slate-200 text-right">
@@ -177,7 +186,14 @@
     const DWR_HOUR = "https://dwr.state.co.us/Rest/GET/api/v2/telemetrystations/telemetrytimeserieshour/";
     const HOUR_MS = 60 * 60 * 1000;
     const ELEVATION_DATUM_FT = 2000;
-    const CHART_HOURS = 72;
+    const CHART_RANGES = [
+      { id: "24h", hours: 24, label: "24 hours" },
+      { id: "3d", hours: 72, label: "3 days" },
+      { id: "7d", hours: 168, label: "7 days" },
+      { id: "15d", hours: 360, label: "15 days" }
+    ];
+    let chartRangeId = "3d";
+    let chartHours = 72;
     const STALE_MS = 26 * HOUR_MS;
     const PROBE_STATIONS = new Set(["BEVBEVCO", "CONPLACO", "RIOLOBCO", "RIOMILCO", "RIOWAGCO"]);
 
@@ -215,6 +231,7 @@
     ].sort((a, b) => a.name.localeCompare(b.name));
 
     const charts = {};
+    const chartInputs = {};
     const cardState = {};
     let activeFilter = "all";
     let searchQuery = "";
@@ -474,7 +491,7 @@
 
     async function fetchParameter(abbrevs, parameter) {
       if (!abbrevs.length) return { ok: true, byId: {}, truncated: false };
-      const start = new Date(Date.now() - 10 * 24 * HOUR_MS);
+      const start = new Date(Date.now() - 15 * 24 * HOUR_MS);
       const end = new Date(Date.now() + 24 * HOUR_MS);
       const url = `${DWR_HOUR}?format=json&abbrev=${abbrevs.map(encodeURIComponent).join(",")}&parameter=${encodeURIComponent(parameter)}&startDate=${formatDwrQueryDate(start)}&endDate=${formatDwrQueryDate(end)}`;
       try {
@@ -497,7 +514,7 @@
       const weekAgo = Math.abs(weekFactor) < 0.001 ? nowVal : nowVal / weekFactor;
       const end = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
       const points = [];
-      for (let i = 240; i >= 0; i--) {
+      for (let i = 15 * 24; i >= 0; i--) {
         const hoursAgo = i;
         let value;
         if (hoursAgo >= 24 * 7) value = weekAgo;
@@ -590,6 +607,39 @@
       return series[series.length - 1];
     }
 
+    function chartRangeLabel() {
+      const match = CHART_RANGES.find((range) => range.id === chartRangeId);
+      return `Hourly · last ${match ? match.label : `${chartHours} hours`}`;
+    }
+
+    function drawRemembered(id, primary, secondary, primaryLabel, secondaryLabel, primaryColor, secondaryColor) {
+      chartInputs[id] = { primary, secondary, primaryLabel, secondaryLabel, primaryColor, secondaryColor };
+      drawChart(id, primary, secondary, primaryLabel, secondaryLabel, primaryColor, secondaryColor);
+    }
+
+    function redrawCharts() {
+      for (const [id, input] of Object.entries(chartInputs)) {
+        drawChart(id, input.primary, input.secondary, input.primaryLabel, input.secondaryLabel, input.primaryColor, input.secondaryColor);
+      }
+    }
+
+    function setChartRange(id) {
+      const range = CHART_RANGES.find((item) => item.id === id);
+      if (!range) return;
+      chartRangeId = range.id;
+      chartHours = range.hours;
+      for (const btn of document.querySelectorAll(".range-btn")) {
+        const on = btn.dataset.range === chartRangeId;
+        btn.classList.toggle("bg-slate-900", on);
+        btn.classList.toggle("text-white", on);
+        btn.classList.toggle("font-semibold", on);
+        btn.classList.toggle("bg-slate-100", !on);
+        btn.classList.toggle("text-slate-700", !on);
+        btn.classList.toggle("font-medium", !on);
+      }
+      redrawCharts();
+    }
+
     function hourlyWindow(seriesList) {
       const stamps = [];
       for (const series of seriesList) {
@@ -597,7 +647,7 @@
       }
       if (!stamps.length) return { labels: [], maps: seriesList.map(() => []) };
       const end = Math.max(...stamps);
-      const start = end - CHART_HOURS * HOUR_MS;
+      const start = end - chartHours * HOUR_MS;
       const labels = [];
       const slots = [];
       for (let ms = start; ms <= end; ms += HOUR_MS) {
@@ -634,7 +684,7 @@
         if (note) note.textContent = typeof Chart === "undefined" ? "Chart library did not load." : "Not enough hourly points to draw.";
         return;
       }
-      if (note) note.textContent = "Hourly · last 72 hours";
+      if (note) note.textContent = chartRangeLabel();
       const ctx = canvas.getContext("2d");
       const gradient = ctx.createLinearGradient(0, 0, 0, 160);
       gradient.addColorStop(0, primaryColor + "33");
@@ -695,7 +745,33 @@
           scales: {
             x: {
               grid: { display: false },
-              ticks: { maxTicksLimit: 6, font: { size: 10 }, color: "#64748b" }
+              afterBuildTicks(scale) {
+                if (chartHours < 168) return;
+                const byDate = new Map();
+                for (const tick of scale.ticks) {
+                  const date = String(scale.getLabelForValue(tick.value)).split(" ")[0];
+                  if (!byDate.has(date)) byDate.set(date, tick);
+                }
+                let chosen = [...byDate.values()];
+                if (chosen.length > 8) {
+                  const step = Math.ceil(chosen.length / 8);
+                  chosen = chosen.filter((_, index) => index % step === 0);
+                }
+                scale.ticks = chosen;
+              },
+              ticks: {
+                autoSkip: chartHours < 168,
+                maxTicksLimit: 6,
+                maxRotation: 0,
+                minRotation: 0,
+                font: { size: 10 },
+                color: "#64748b",
+                callback(value) {
+                  const label = this.getLabelForValue(value);
+                  if (chartHours < 168) return label;
+                  return String(label).split(" ")[0];
+                }
+              }
             },
             y: {
               position: "left",
@@ -761,7 +837,7 @@
                 <span id="right-label-${station.id}">${stream ? "Stage (ft)" : "Gage (ft)"}</span>
               </div>
               <div class="relative w-full h-44"><canvas id="chart-${station.id}"></canvas></div>
-              <p id="chart-note-${station.id}" class="text-[10px] text-slate-400 mt-1">Hourly · last 72 hours</p>
+              <p id="chart-note-${station.id}" class="text-[10px] text-slate-400 mt-1">Hourly · last 3 days</p>
             </div>
           </article>`;
       }).join("");
@@ -863,7 +939,7 @@
 
       const rightLabel = document.getElementById(`right-label-${id}`);
       rightLabel.textContent = gageSeries.length ? "Stage (ft)" : "No stage series";
-      drawChart(id, flowSeries, gageSeries, "Flow (cfs)", "Stage (ft)", "#0284c7", "#64748b");
+      drawRemembered(id, flowSeries, gageSeries, "Flow (cfs)", "Stage (ft)", "#0284c7", "#64748b");
     }
 
     function renderReservoir(station, bundle) {
@@ -944,7 +1020,7 @@
         }
         story.textContent = bits.join(" ");
       }
-      drawChart(id, storageSeries, elevSeries, "Storage (ac-ft)", realElev ? "Elevation (ft)" : "Staff gage (ft)", "#059669", "#3b82f6");
+      drawRemembered(id, storageSeries, elevSeries, "Storage (ac-ft)", realElev ? "Elevation (ft)" : "Staff gage (ft)", "#059669", "#3b82f6");
     }
 
     function updateCounters() {
@@ -1096,6 +1172,11 @@
     document.getElementById("filter-bar").addEventListener("click", (event) => {
       const btn = event.target.closest(".filter-btn");
       if (btn) setFilter(btn.dataset.filter);
+    });
+    document.getElementById("range-bar").addEventListener("click", (event) => {
+      const btn = event.target.closest(".range-btn");
+      if (!btn) return;
+      if (btn.dataset.range !== chartRangeId) setChartRange(btn.dataset.range);
     });
     document.getElementById("demo-mode-toggle").addEventListener("change", (event) => {
       demoMode = event.target.checked;
